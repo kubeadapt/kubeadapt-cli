@@ -1,32 +1,72 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var (
-	outputFormat string
-	verbose      bool
-	configFile   string
+	cfgFile   string
+	apiURL    string
+	apiKey    string
+	outputFmt string
+	noColor   bool
+	verbose   bool
+	cfg       *config.Config
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "replace-me",
-	Short: "Replace with a short description of your CLI",
-	Long:  `Replace with a longer description of your CLI tool.`,
+	Use:   "kubeadapt",
+	Short: "KubeAdapt CLI - Kubernetes cost optimization",
+	Long:  `KubeAdapt CLI provides command-line access to the KubeAdapt platform for Kubernetes cost optimization, resource management, and recommendations.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Skip config loading for auth login and version commands
+		if cmd.Name() == "login" || cmd.Name() == "version" || cmd.Name() == "completion" {
+			return nil
+		}
+
+		var err error
+		cfg, err = config.Load(cfgFile)
+		if err != nil {
+			// Non-fatal: config might not exist yet
+			cfg = config.Default()
+		}
+
+		// Environment variables override config values
+		if envURL := os.Getenv("KUBEADAPT_API_URL"); envURL != "" {
+			cfg.APIURL = envURL
+		}
+		if envKey := os.Getenv("KUBEADAPT_API_KEY"); envKey != "" {
+			cfg.APIKey = envKey
+		}
+
+		// CLI flags override everything
+		if apiURL != "" {
+			cfg.APIURL = apiURL
+		}
+		if apiKey != "" {
+			cfg.APIKey = apiKey
+		}
+
+		return nil
+	},
 }
 
-// Execute is the entry point called from main.go.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "Output format (table|json|yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.kubeadapt/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "KubeAdapt API URL")
+	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "KubeAdapt API key")
+	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (table|json|yaml)")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "Config file path (default: $HOME/.replace-me/config.yaml)")
 }
