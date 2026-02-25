@@ -1,0 +1,52 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kubeadapt-cli
+  description: "Kubeadapt CLI tool for terminal environment"
+  annotations:
+    github.com/project-slug: kubeadapt/kubeadapt-cli
+    backstage.io/techdocs-ref: dir:.
+    backstage.io/adr-location: docs/adrs
+    backstage.io/source-template: template:default/create-cli-infra
+    terasky.backstage.io/crossplane-cluster: kubeadapt-eks
+    terasky.backstage.io/crossplane-resource: cliinfras.platform.kubeadapt.io
+    terasky.backstage.io/crossplane-version: v2
+    terasky.backstage.io/composite-name: kubeadapt-cli-j679z
+    terasky.backstage.io/composite-group: platform.kubeadapt.io
+    terasky.backstage.io/composite-version: v1alpha1
+    terasky.backstage.io/composite-plural: cliinfras
+    terasky.backstage.io/composite-kind: CliInfra
+    terasky.backstage.io/crossplane-scope: Cluster
+    terasky.backstage.io/composition-name: cliinfra-composition
+  tags:
+    - go
+    - cli
+    - crossplane
+    - kubeadapt
+  links:
+    - url: https://github.com/kubeadapt/kubeadapt-cli
+      title: GitHub Repository
+      icon: github
+spec:
+  type: tool
+  lifecycle: production
+  owner: group:default/core
+  system: kubeadapt-platform
+  dependsOn:
+    - resource:default/kubeadapt-cli-github-repo
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: kubeadapt-cli-github-repo
+  description: "GitHub repository for kubeadapt-cli"
+  tags:
+    - github
+    - repository
+    - crossplane
+spec:
+  type: github-repository
+  owner: group:default/core
+  system: kubeadapt-platform
+  dependencyOf:
+    - component:default/kubeadapt-cli
