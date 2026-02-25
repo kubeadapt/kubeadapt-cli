@@ -2,10 +2,17 @@ package testutil
 
 import "github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 
-func StringPtr(s string) *string    { return &s }
+// StringPtr returns a pointer to the given string value.
+func StringPtr(s string) *string { return &s }
+
+// Float64Ptr returns a pointer to the given float64 value.
 func Float64Ptr(f float64) *float64 { return &f }
-func BoolPtr(b bool) *bool          { return &b }
-func IntPtr(i int) *int             { return &i }
+
+// BoolPtr returns a pointer to the given bool value.
+func BoolPtr(b bool) *bool { return &b }
+
+// IntPtr returns a pointer to the given int value.
+func IntPtr(i int) *int { return &i }
 
 // SampleOverview returns a sample overview response.
 func SampleOverview() *types.OverviewResponse {
@@ -225,6 +232,7 @@ func SampleDashboard() *types.DashboardResponse {
 	}
 }
 
+// SampleClusterDashboard returns a sample cluster dashboard response.
 func SampleClusterDashboard() *types.ClusterDashboardResponse {
 	return &types.ClusterDashboardResponse{
 		ClusterID:                "cls-001",
@@ -263,6 +271,7 @@ func SampleClusterDashboard() *types.ClusterDashboardResponse {
 	}
 }
 
+// SampleCapacityPlanning returns a sample capacity planning response.
 func SampleCapacityPlanning() *types.CapacityPlanningResponse {
 	return &types.CapacityPlanningResponse{
 		ClusterID: "cls-001",
@@ -286,6 +295,7 @@ func SampleCapacityPlanning() *types.CapacityPlanningResponse {
 	}
 }
 
+// SampleRecommendations returns sample recommendation data.
 func SampleRecommendations() []types.RecommendationResponse {
 	return []types.RecommendationResponse{
 		{

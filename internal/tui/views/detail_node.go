@@ -87,7 +87,10 @@ func (v *NodeDetailView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				data := msg.Data.(*nodeDetailData)
+				data, ok := msg.Data.(*nodeDetailData)
+				if !ok {
+					return v, nil
+				}
 				v.metrics = data.Metrics
 			}
 		}

@@ -56,7 +56,10 @@ func (v *NodeGroupsView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.NodeGroupListResponse)
+				resp, ok := msg.Data.(*types.NodeGroupListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.NodeGroups
 				v.buildTable()
 			}
@@ -119,8 +122,8 @@ func (v *NodeGroupsView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *NodeGroupsView) buildTable() {
 	headers := []string{"Name", "Cluster", "Instance", "Nodes", "CPU", "Memory", "Spot %", "$/hr"}
-	var rows [][]string
-	var rowIDs []string
+	rows := make([][]string, 0, len(v.data))
+	rowIDs := make([]string, 0, len(v.data))
 	for _, g := range v.data {
 		rows = append(rows, []string{
 			g.Name,

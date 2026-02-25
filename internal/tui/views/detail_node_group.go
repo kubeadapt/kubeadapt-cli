@@ -80,7 +80,11 @@ func (v *NodeGroupDetailView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				v.detail = msg.Data.(*types.NodeGroupDetailResponse)
+				detail, ok := msg.Data.(*types.NodeGroupDetailResponse)
+				if !ok {
+					return v, nil
+				}
+				v.detail = detail
 			}
 		}
 	case spinner.TickMsg:
@@ -127,7 +131,7 @@ func (v *NodeGroupDetailView) renderContent(width int) string {
 
 	if len(d.Nodes) > 0 {
 		headers := []string{"Node", "Instance", "AZ", "Ready", "CPU Cap", "Mem Cap", "Spot", "$/hr"}
-		var rows [][]string
+		rows := make([][]string, 0, len(d.Nodes))
 		for _, n := range d.Nodes {
 			rows = append(rows, []string{
 				n.NodeName,

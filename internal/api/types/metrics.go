@@ -39,6 +39,7 @@ type ClusterDashboardResponse struct {
 	RecommendationSummary   []RecommendationSummaryItem `json:"recommendation_summary"`
 }
 
+// RecommendationSummaryItem is a single entry in the recommendation summary.
 type RecommendationSummaryItem struct {
 	Type             string  `json:"type"`
 	Count            int     `json:"count"`

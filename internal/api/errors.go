@@ -3,7 +3,7 @@ package api
 import "fmt"
 
 // APIError represents an error from the KubeAdapt API.
-type APIError struct {
+type APIError struct { //nolint:revive
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"detail"`
 }
