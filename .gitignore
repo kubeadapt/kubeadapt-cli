@@ -50,3 +50,4 @@ tests/e2e/e2e-logs/
 dist/
 *.tar.gz
 *.zip
+.omc/

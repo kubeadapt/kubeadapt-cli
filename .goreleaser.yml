@@ -1,6 +1,6 @@
 version: 2
 
-project_name: replace-me
+project_name: kubeadapt-cli
 
 before:
   hooks:
@@ -9,7 +9,7 @@ before:
 builds:
   - id: default
     main: ./main.go
-    binary: replace-me
+    binary: kubeadapt-cli
     env:
       - CGO_ENABLED=0
     goos:
@@ -21,9 +21,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/kubeadapt/replace-me/internal/version.Version={{.Version}}
-      - -X github.com/kubeadapt/replace-me/internal/version.Commit={{.Commit}}
-      - -X github.com/kubeadapt/replace-me/internal/version.Date={{.Date}}
+      - -X github.com/kubeadapt/kubeadapt-cli/internal/version.Version={{.Version}}
+      - -X github.com/kubeadapt/kubeadapt-cli/internal/version.Commit={{.Commit}}
+      - -X github.com/kubeadapt/kubeadapt-cli/internal/version.Date={{.Date}}
 
 archives:
   - id: default
@@ -54,13 +54,13 @@ release:
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HOMEBREW DISTRIBUTION
-# Enables: brew install kubeadapt/tap/replace-me
+# Enables: brew install kubeadapt/tap/kubeadapt-cli
 #
 # Prerequisite: create github.com/kubeadapt/homebrew-tap (public repo)
 # If you don't need Homebrew distribution, delete this entire section.
 # ──────────────────────────────────────────────────────────────────────────────
 brews:
-  - name: replace-me
+  - name: kubeadapt-cli
     repository:
       owner: kubeadapt
       name: homebrew-tap
@@ -72,25 +72,25 @@ brews:
     description: "Replace with your CLI description"
     license: "Apache-2.0"
     install: |
-      bin.install "replace-me"
+      bin.install "kubeadapt-cli"
     test: |
-      system "#{bin}/replace-me", "version"
+      system "#{bin}/kubeadapt-cli", "version"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # KREW DISTRIBUTION (kubectl plugin manager)
-# Enables: kubectl krew install replace-me  →  kubectl replace-me
+# Enables: kubectl krew install kubeadapt-cli  →  kubectl kubeadapt-cli
 #
 # Prerequisites:
 #   1. Create github.com/kubeadapt/krew-index (public repo)
 #   2. For official distribution: open PR to kubernetes-sigs/krew-index
 #
-# Binary naming: GoReleaser will also produce a kubectl-replace-me binary
+# Binary naming: GoReleaser will also produce a kubectl-kubeadapt-cli binary
 # that kubectl plugin discovery picks up automatically from PATH.
 #
 # If this CLI is NOT a kubectl plugin, delete this entire section.
 # ──────────────────────────────────────────────────────────────────────────────
 # krews:
-#   - name: replace-me
+#   - name: kubeadapt-cli
 #     repository:
 #       owner: kubeadapt
 #       name: krew-index

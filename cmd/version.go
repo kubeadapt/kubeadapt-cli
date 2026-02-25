@@ -2,19 +2,27 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/spf13/cobra"
+)
 
-	"github.com/kubeadapt/replace-me/internal/version"
+var (
+	// Set via ldflags at build time
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
 )
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Version:    %s\n", version.Version)
-		fmt.Printf("Commit:     %s\n", version.Commit)
-		fmt.Printf("Build Date: %s\n", version.Date)
+		fmt.Printf("kubeadapt %s\n", Version)
+		fmt.Printf("  Commit:     %s\n", Commit)
+		fmt.Printf("  Built:      %s\n", BuildDate)
+		fmt.Printf("  Go version: %s\n", runtime.Version())
+		fmt.Printf("  OS/Arch:    %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	},
 }
 

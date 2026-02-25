@@ -1,6 +1,6 @@
 package main
 
-import "github.com/kubeadapt/replace-me/cmd"
+import "github.com/kubeadapt/kubeadapt-cli/cmd"
 
 func main() {
 	cmd.Execute()
