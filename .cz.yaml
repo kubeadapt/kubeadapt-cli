@@ -37,4 +37,5 @@ settings:
     - install
     - completion
     - internal
+    - logger
     - pkg
