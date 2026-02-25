@@ -1,0 +1,170 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  go: "1.26"
+  concurrency: 4
+  skip-dirs:
+    - vendor
+    - build
+    - testdata
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_gen\\.go$"
+
+linters:
+  enable:
+    # Core checks
+    - errcheck      # Check for unchecked errors
+    - govet         # Vet examines Go source code
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Check for unused code
+    - unconvert     # Remove unnecessary type conversions
+    - misspell      # Spelling errors
+    - goconst       # Repeated strings that could be constants
+
+    # Security
+    - gosec         # Security problems
+
+    # Bugs & Errors
+    - bodyclose     # HTTP response body closed
+    - errchkjson    # Check JSON encode/decode errors
+    - nilerr        # Find nil errors being returned
+    - errorlint     # Error wrapping issues (Go 1.13+)
+
+    # Performance
+    - prealloc      # Find slice declarations that could be preallocated
+
+    # Style & Code Quality
+    - revive        # Fast, configurable, extensible linter
+    - whitespace    # Detect unnecessary whitespace
+
+    # Context & Concurrency
+    - contextcheck  # Check context.Context usage
+
+    # CLI-specific
+    - gocyclo       # Cyclomatic complexity (CLI commands can branch heavily)
+    - unparam       # Unused function parameters
+
+  disable:
+    - wrapcheck     # Too strict for most codebases
+    - varnamelen    # Variable name length checks (too opinionated)
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment  # Too strict for most cases
+        - shadow          # Can be noisy
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      ignore-tests: true
+
+    misspell:
+      locale: US
+
+    gosec:
+      excludes:
+        # - G104  # Audit errors not checked (covered by errcheck)
+      severity: high
+      confidence: medium
+
+    gocyclo:
+      min-complexity: 15
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+          disabled: true  # Often too strict
+        - name: range
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: unreachable-code
+
+  exclusions:
+    generated: lax
+
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - goconst
+          - revive
+          - gocyclo
+          - unparam
+
+      - path: _test\.go
+        text: "Function .* is too long"
+        linters:
+          - revive
+
+      - linters:
+          - godox
+        text: "TODO"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  new-from-rev: HEAD
+
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: "SA1019:"
+
+    - linters:
+        - gosec
+      text: "G104:"
+      path: _test\.go
+
+severity:
+  default: error
+
+  rules:
+    - linters:
+        - gosec
+      severity: high
+
+    - linters:
+        - whitespace
+        - misspell
+      severity: warning
+
+    - linters:
+        - revive
+        - goconst
+        - gocyclo
+      severity: warning
+
+output:
+  formats:
+    text:
+      print-linter-name: true
+      print-issued-lines: true
+  sort-order:
+    - severity
+    - linter
+    - file
