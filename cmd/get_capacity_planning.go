@@ -35,6 +35,8 @@ var getCapacityPlanningCmd = &cobra.Command{
 
 func init() {
 	getCapacityPlanningCmd.Flags().String("cluster-id", "", "Cluster ID (required)")
-	getCapacityPlanningCmd.MarkFlagRequired("cluster-id")
+	if err := getCapacityPlanningCmd.MarkFlagRequired("cluster-id"); err != nil {
+		panic(err)
+	}
 	getCmd.AddCommand(getCapacityPlanningCmd)
 }

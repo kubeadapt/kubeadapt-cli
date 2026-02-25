@@ -97,7 +97,10 @@ func (v *NamespaceDetailView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				data := msg.Data.(*namespaceDetailData)
+				data, ok := msg.Data.(*namespaceDetailData)
+				if !ok {
+					return v, nil
+				}
 				v.detail = data.Detail
 				v.trends = data.Trends
 			}
@@ -181,7 +184,7 @@ func (v *NamespaceDetailView) renderContent(width int) string {
 
 	if len(d.Workloads) > 0 {
 		headers := []string{"Name", "Kind", "Replicas", "CPU Req", "Mem Req", "$/hr"}
-		var rows [][]string
+		rows := make([][]string, 0, len(d.Workloads))
 		for _, w := range d.Workloads {
 			rows = append(rows, []string{
 				w.WorkloadName,
@@ -208,7 +211,7 @@ func (v *NamespaceDetailView) View(width, height int) string {
 		return tui.ErrorStyle.Render("Error: " + v.err.Error())
 	}
 	if v.detail == nil {
-		return "No data"
+		return noDataMsg
 	}
 
 	if !v.viewportReady {

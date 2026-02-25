@@ -58,7 +58,10 @@ func (v *ClustersView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.ClusterListResponse)
+				resp, ok := msg.Data.(*types.ClusterListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.clusters = resp.Clusters
 				v.buildTable()
 			}
@@ -122,8 +125,8 @@ func (v *ClustersView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *ClustersView) buildTable() {
 	headers := []string{"ID", "Name", "Provider", "Region", "Status", "Nodes", "Efficiency", "Monthly $", "$/hr"}
-	var rows [][]string
-	var rowIDs []string
+	rows := make([][]string, 0, len(v.clusters))
+	rowIDs := make([]string, 0, len(v.clusters))
 	for _, c := range v.clusters {
 		rows = append(rows, []string{
 			output.ShortID(c.ID),

@@ -289,7 +289,7 @@ func renderStatusBar(width int, inDetailMode bool) string {
 		}
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(hints))
 	for _, h := range hints {
 		k := StatusBarKeyStyle.Render(h.key)
 		d := StatusBarDescStyle.Render(h.desc)

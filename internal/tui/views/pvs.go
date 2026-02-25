@@ -56,7 +56,10 @@ func (v *PVsView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.PersistentVolumeListResponse)
+				resp, ok := msg.Data.(*types.PersistentVolumeListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.PersistentVolumes
 				v.buildTable()
 			}
@@ -108,7 +111,7 @@ func (v *PVsView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *PVsView) buildTable() {
 	headers := []string{"Name", "Cluster", "Namespace", "PVC", "Storage Class", "Capacity", "Type", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(v.data))
 	for _, pv := range v.data {
 		rows = append(rows, []string{
 			pv.Name,

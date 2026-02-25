@@ -131,7 +131,7 @@ func (v *CapacityPlanningView) renderContent(width int) string {
 	}
 
 	if len(d.NodeGroups) > 0 {
-		var rows [][]string
+		rows := make([][]string, 0, len(d.NodeGroups))
 		for _, ng := range d.NodeGroups {
 			instType := "-"
 			if ng.InstanceType != nil {
@@ -171,7 +171,7 @@ func (v *CapacityPlanningView) View(width, height int) string {
 		return tui.ErrorStyle.Render("Error: " + v.err.Error())
 	}
 	if v.data == nil {
-		return "No data"
+		return noDataMsg
 	}
 
 	if !v.viewportReady {

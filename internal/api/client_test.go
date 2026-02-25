@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
@@ -79,8 +80,8 @@ func TestUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
 	}
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
 	if !apiErr.IsAuthError() {
@@ -255,8 +256,8 @@ func TestGetCluster404(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent cluster")
 	}
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
 	if !apiErr.IsNotFound() {

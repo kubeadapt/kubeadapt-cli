@@ -59,7 +59,10 @@ func (v *WorkloadsView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.WorkloadListResponse)
+				resp, ok := msg.Data.(*types.WorkloadListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.Workloads
 				v.total = resp.Total
 				v.buildTable()
@@ -124,8 +127,8 @@ func (v *WorkloadsView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *WorkloadsView) buildTable() {
 	headers := []string{"Name", "Kind", "Namespace", "Cluster", "Replicas", "Efficiency", "Monthly $", "$/hr"}
-	var rows [][]string
-	var rowIDs []string
+	rows := make([][]string, 0, len(v.data))
+	rowIDs := make([]string, 0, len(v.data))
 	for _, w := range v.data {
 		rows = append(rows, []string{
 			w.WorkloadName,

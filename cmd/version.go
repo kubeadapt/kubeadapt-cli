@@ -8,9 +8,11 @@ import (
 )
 
 var (
-	// Set via ldflags at build time
-	Version   = "dev"
-	Commit    = "none"
+	// Version is the CLI version, set via ldflags at build time.
+	Version = "dev"
+	// Commit is the git commit hash, set via ldflags at build time.
+	Commit = "none"
+	// BuildDate is the build date, set via ldflags at build time.
 	BuildDate = "unknown"
 )
 
