@@ -91,7 +91,10 @@ func (v *WorkloadDetailView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				data := msg.Data.(*workloadDetailData)
+				data, ok := msg.Data.(*workloadDetailData)
+				if !ok {
+					return v, nil
+				}
 				v.metrics = data.Metrics
 				v.nodes = data.Nodes
 			}
@@ -203,7 +206,7 @@ func (v *WorkloadDetailView) renderContent(width int) string {
 
 	if v.nodes != nil && len(v.nodes.Nodes) > 0 {
 		headers := []string{"Node", "Pods", "CPU Usage", "Memory"}
-		var rows [][]string
+		rows := make([][]string, 0, len(v.nodes.Nodes))
 		for _, n := range v.nodes.Nodes {
 			rows = append(rows, []string{
 				n.NodeName,

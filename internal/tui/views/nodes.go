@@ -58,7 +58,10 @@ func (v *NodesView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.NodeListResponse)
+				resp, ok := msg.Data.(*types.NodeListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.Nodes
 				v.total = resp.Total
 				v.buildTable()
@@ -123,8 +126,8 @@ func (v *NodesView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *NodesView) buildTable() {
 	headers := []string{"Name", "Cluster", "Instance", "Ready", "CPU", "Memory", "Pods", "Spot", "$/hr"}
-	var rows [][]string
-	var rowIDs []string
+	rows := make([][]string, 0, len(v.data))
+	rowIDs := make([]string, 0, len(v.data))
 	for _, n := range v.data {
 		rows = append(rows, []string{
 			n.NodeName,

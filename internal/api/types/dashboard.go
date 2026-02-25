@@ -1,10 +1,12 @@
 package types
 
+// CostTrendPoint is a single data point in a cost trend time series.
 type CostTrendPoint struct {
 	Date      string  `json:"date"`
 	TotalCost float64 `json:"total_cost"`
 }
 
+// TopCluster represents a cluster entry in the top clusters list.
 type TopCluster struct {
 	ClusterID   string   `json:"cluster_id"`
 	ClusterName string   `json:"cluster_name"`
@@ -12,6 +14,7 @@ type TopCluster struct {
 	Efficiency  *float64 `json:"efficiency"`
 }
 
+// DashboardResponse is the organization-level dashboard response.
 type DashboardResponse struct {
 	OrganizationID          string           `json:"organization_id"`
 	TotalMonthlyCost        float64          `json:"total_monthly_cost"`

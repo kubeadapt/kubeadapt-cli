@@ -102,7 +102,10 @@ func (v *ClusterDetailView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				data := msg.Data.(*clusterDetailData)
+				data, ok := msg.Data.(*clusterDetailData)
+				if !ok {
+					return v, nil
+				}
 				v.dashboard = data.Dashboard
 				v.costDist = data.CostDist
 			}
@@ -173,7 +176,7 @@ func (v *ClusterDetailView) renderContent(width int) string {
 	sections = append(sections, components.SideBySide(costPanel, utilPanel))
 
 	var breakdownPanel components.Panel
-	if d.CostBreakdown != nil && len(d.CostBreakdown) > 0 {
+	if len(d.CostBreakdown) > 0 {
 		bc := components.NewBarChart("Cost Breakdown", halfWidth-4)
 		keys := make([]string, 0, len(d.CostBreakdown))
 		for k := range d.CostBreakdown {
@@ -191,7 +194,7 @@ func (v *ClusterDetailView) renderContent(width int) string {
 
 	var recPanel components.Panel
 	if len(d.RecommendationSummary) > 0 {
-		var recLines []string
+		recLines := make([]string, 0, len(d.RecommendationSummary))
 		sort.Slice(d.RecommendationSummary, func(i, j int) bool {
 			return d.RecommendationSummary[i].PotentialSavings > d.RecommendationSummary[j].PotentialSavings
 		})

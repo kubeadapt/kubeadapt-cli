@@ -56,7 +56,10 @@ func (v *NamespacesView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.NamespaceListResponse)
+				resp, ok := msg.Data.(*types.NamespaceListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.Namespaces
 				v.buildTable()
 			}
@@ -116,7 +119,7 @@ func (v *NamespacesView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *NamespacesView) buildTable() {
 	headers := []string{"Name", "Cluster", "Pods", "Workloads", "Containers", "Efficiency", "Monthly $", "Team", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(v.data))
 	for _, n := range v.data {
 		rows = append(rows, []string{
 			n.Name,

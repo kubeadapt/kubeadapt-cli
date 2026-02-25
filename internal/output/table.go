@@ -76,7 +76,7 @@ func RenderOverview(o *types.OverviewResponse, noColor bool) {
 // RenderClusters renders a list of clusters as a styled table.
 func RenderClusters(clusters []types.ClusterResponse, noColor bool) {
 	headers := []string{"ID", "Name", "Provider", "Region", "Status", "Nodes", "Efficiency", "Monthly $", "Savings", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(clusters))
 	for _, c := range clusters {
 		rows = append(rows, []string{
 			c.ID,
@@ -123,7 +123,7 @@ func RenderCluster(c *types.ClusterResponse, noColor bool) {
 // RenderWorkloads renders a list of workloads as a styled table.
 func RenderWorkloads(workloads []types.WorkloadResponse, noColor bool) {
 	headers := []string{"Name", "Kind", "Namespace", "Cluster", "Replicas", "Efficiency", "Monthly $", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(workloads))
 	for _, w := range workloads {
 		rows = append(rows, []string{
 			w.WorkloadName,
@@ -142,7 +142,7 @@ func RenderWorkloads(workloads []types.WorkloadResponse, noColor bool) {
 // RenderNodes renders a list of nodes as a styled table.
 func RenderNodes(nodes []types.NodeResponse, noColor bool) {
 	headers := []string{"Name", "Cluster", "Instance", "Ready", "CPU", "Memory", "Pods", "Spot", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(nodes))
 	for _, n := range nodes {
 		rows = append(rows, []string{
 			n.NodeName,
@@ -162,7 +162,7 @@ func RenderNodes(nodes []types.NodeResponse, noColor bool) {
 // RenderRecommendations renders a list of recommendations as a styled table.
 func RenderRecommendations(recs []types.RecommendationResponse, noColor bool) {
 	headers := []string{"ID", "Type", "Cluster", "Resource", "Priority", "Status", "Monthly Savings"}
-	var rows [][]string
+	rows := make([][]string, 0, len(recs))
 	for _, r := range recs {
 		resource := FormatOptionalString(r.ResourceName)
 		if ns := FormatOptionalString(r.Namespace); ns != "-" && ns != "" {
@@ -184,7 +184,7 @@ func RenderRecommendations(recs []types.RecommendationResponse, noColor bool) {
 // RenderTeamCosts renders team cost data as a styled table.
 func RenderTeamCosts(costs []types.TeamCostResponse, noColor bool) {
 	headers := []string{"Team", "Namespaces", "Workloads", "Pods", "CPU", "Memory", "$/hr", "$/mo"}
-	var rows [][]string
+	rows := make([][]string, 0, len(costs))
 	for _, c := range costs {
 		rows = append(rows, []string{
 			c.Team,
@@ -203,7 +203,7 @@ func RenderTeamCosts(costs []types.TeamCostResponse, noColor bool) {
 // RenderDepartmentCosts renders department cost data as a styled table.
 func RenderDepartmentCosts(costs []types.DepartmentCostResponse, noColor bool) {
 	headers := []string{"Department", "Namespaces", "Workloads", "Pods", "CPU", "Memory", "$/hr", "$/mo"}
-	var rows [][]string
+	rows := make([][]string, 0, len(costs))
 	for _, c := range costs {
 		rows = append(rows, []string{
 			c.Department,
@@ -222,7 +222,7 @@ func RenderDepartmentCosts(costs []types.DepartmentCostResponse, noColor bool) {
 // RenderNodeGroups renders node groups as a styled table.
 func RenderNodeGroups(groups []types.NodeGroupResponse, noColor bool) {
 	headers := []string{"Name", "Cluster", "Instance", "Nodes", "CPU", "Memory", "Spot %", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(groups))
 	for _, g := range groups {
 		rows = append(rows, []string{
 			g.Name,
@@ -241,7 +241,7 @@ func RenderNodeGroups(groups []types.NodeGroupResponse, noColor bool) {
 // RenderNamespaces renders namespaces as a styled table.
 func RenderNamespaces(namespaces []types.NamespaceResponse, noColor bool) {
 	headers := []string{"Name", "Cluster", "Pods", "Workloads", "Containers", "Efficiency", "Monthly $", "Team", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(namespaces))
 	for _, n := range namespaces {
 		rows = append(rows, []string{
 			n.Name,
@@ -284,7 +284,7 @@ func RenderCapacityPlanning(cp *types.CapacityPlanningResponse, noColor bool) {
 
 	if len(cp.NodeGroups) > 0 {
 		ngHeaders := []string{"Name", "Instance", "Count", "Spot %", "$/hr"}
-		var ngRows [][]string
+		ngRows := make([][]string, 0, len(cp.NodeGroups))
 		for _, ng := range cp.NodeGroups {
 			ngRows = append(ngRows, []string{
 				ng.Name,
@@ -300,7 +300,7 @@ func RenderCapacityPlanning(cp *types.CapacityPlanningResponse, noColor bool) {
 
 	if len(cp.CostByAZ) > 0 {
 		azHeaders := []string{"Zone", "Nodes", "$/hr"}
-		var azRows [][]string
+		azRows := make([][]string, 0, len(cp.CostByAZ))
 		for _, az := range cp.CostByAZ {
 			azRows = append(azRows, []string{
 				az.Zone,
@@ -315,7 +315,7 @@ func RenderCapacityPlanning(cp *types.CapacityPlanningResponse, noColor bool) {
 // RenderPersistentVolumes renders persistent volumes as a styled table.
 func RenderPersistentVolumes(pvs []types.PersistentVolumeResponse, noColor bool) {
 	headers := []string{"Name", "Cluster", "Namespace", "PVC", "Storage Class", "Capacity", "Type", "$/hr"}
-	var rows [][]string
+	rows := make([][]string, 0, len(pvs))
 	for _, pv := range pvs {
 		rows = append(rows, []string{
 			pv.Name,

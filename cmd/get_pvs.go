@@ -8,8 +8,8 @@ import (
 )
 
 var getPVsCmd = &cobra.Command{
-	Use:   "persistent-volumes",
-	Short: "List persistent volumes",
+	Use:     "persistent-volumes",
+	Short:   "List persistent volumes",
 	Aliases: []string{"pvs"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, err := newAPIClient()

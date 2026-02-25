@@ -16,6 +16,8 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/tui/components"
 )
 
+const noDataMsg = "No data"
+
 // OverviewView displays the dashboard overview with panels, charts, and metrics.
 type OverviewView struct {
 	client        *api.Client
@@ -145,7 +147,7 @@ func (v *OverviewView) renderContent(width int) string {
 	// --- Middle row: Cost Trends Line Chart ---
 	if len(d.CostTrends) > 0 {
 		chart := components.NewLineChart("Cost Trends (30 Days)", width-4, 10)
-		var series []float64
+		series := make([]float64, 0, len(d.CostTrends))
 		for _, p := range d.CostTrends {
 			series = append(series, p.TotalCost)
 		}
@@ -173,7 +175,7 @@ func (v *OverviewView) View(width, height int) string {
 		return tui.ErrorStyle.Render("Error: " + v.err.Error())
 	}
 	if v.data == nil {
-		return "No data"
+		return noDataMsg
 	}
 
 	if !v.viewportReady {

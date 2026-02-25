@@ -18,14 +18,14 @@ func MockHandler(statusCode int, response interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validAuth(r) {
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		if response != nil {
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		}
 	}
 }
@@ -48,7 +48,7 @@ func NewMockServer() *httptest.Server {
 	mux.HandleFunc("/v1/clusters/", func(w http.ResponseWriter, r *http.Request) {
 		if !validAuth(r) {
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
 			return
 		}
 		id := strings.TrimPrefix(r.URL.Path, "/v1/clusters/")
@@ -56,7 +56,7 @@ func NewMockServer() *httptest.Server {
 			clusterID := strings.TrimSuffix(id, "/dashboard")
 			if _, ok := clustersByID[clusterID]; ok {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(SampleClusterDashboard())
+				_ = json.NewEncoder(w).Encode(SampleClusterDashboard())
 				return
 			}
 		}
@@ -64,18 +64,18 @@ func NewMockServer() *httptest.Server {
 			clusterID := strings.TrimSuffix(id, "/capacity-planning")
 			if _, ok := clustersByID[clusterID]; ok {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(SampleCapacityPlanning())
+				_ = json.NewEncoder(w).Encode(SampleCapacityPlanning())
 				return
 			}
 		}
 		if cluster, ok := clustersByID[id]; ok {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(cluster)
+			_ = json.NewEncoder(w).Encode(cluster)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"detail": "Cluster not found"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Cluster not found"})
 	})
 
 	mux.HandleFunc("/v1/workloads", MockHandler(http.StatusOK, map[string]interface{}{

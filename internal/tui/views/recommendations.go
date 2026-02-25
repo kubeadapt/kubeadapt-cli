@@ -58,7 +58,10 @@ func (v *RecommendationsView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				resp := msg.Data.(*types.RecommendationListResponse)
+				resp, ok := msg.Data.(*types.RecommendationListResponse)
+				if !ok {
+					return v, nil
+				}
 				v.data = resp.Recommendations
 				v.total = resp.Total
 				v.buildTable()
@@ -111,7 +114,7 @@ func (v *RecommendationsView) Update(msg tea.Msg) (View, tea.Cmd) {
 
 func (v *RecommendationsView) buildTable() {
 	headers := []string{"ID", "Type", "Cluster", "Resource", "Priority", "Status", "Monthly Savings"}
-	var rows [][]string
+	rows := make([][]string, 0, len(v.data))
 	for _, r := range v.data {
 		resource := output.FormatOptionalString(r.ResourceName)
 		if ns := output.FormatOptionalString(r.Namespace); ns != "-" && ns != "" {

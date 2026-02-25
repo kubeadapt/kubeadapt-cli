@@ -69,7 +69,10 @@ func (v *CostsView) Update(msg tea.Msg) (View, tea.Cmd) {
 			if msg.Err != nil {
 				v.err = msg.Err
 			} else {
-				data := msg.Data.(*tui.CostsData)
+				data, ok := msg.Data.(*tui.CostsData)
+				if !ok {
+					return v, nil
+				}
 				v.teams = data.Teams
 				v.departments = data.Departments
 				v.buildTables()
@@ -140,7 +143,7 @@ func (v *CostsView) activeTable() *components.Table {
 func (v *CostsView) buildTables() {
 	// Teams table
 	headers := []string{"Team", "Namespaces", "Workloads", "Pods", "CPU", "Memory", "$/hr", "$/mo"}
-	var rows [][]string
+	rows := make([][]string, 0, len(v.teams))
 	for _, c := range v.teams {
 		rows = append(rows, []string{
 			c.Team,
@@ -157,9 +160,9 @@ func (v *CostsView) buildTables() {
 
 	// Departments table
 	headers = []string{"Department", "Namespaces", "Workloads", "Pods", "CPU", "Memory", "$/hr", "$/mo"}
-	rows = nil
+	deptRows := make([][]string, 0, len(v.departments))
 	for _, c := range v.departments {
-		rows = append(rows, []string{
+		deptRows = append(deptRows, []string{
 			c.Department,
 			output.FormatInt(c.NamespaceCount),
 			output.FormatInt(c.WorkloadCount),
@@ -170,7 +173,7 @@ func (v *CostsView) buildTables() {
 			output.FormatCost(c.MonthlyCost),
 		})
 	}
-	v.deptTable = components.NewTable(headers, rows)
+	v.deptTable = components.NewTable(headers, deptRows)
 }
 
 func (v *CostsView) View(width, height int) string {
