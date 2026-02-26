@@ -14,7 +14,7 @@ func newAPIClient() (*api.Client, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("no API key configured. Run 'kubeadapt auth login' first")
 	}
-	return api.NewClient(cfg.APIURL, cfg.APIKey), nil
+	return api.NewClient(cfg.APIURL, cfg.APIKey, api.WithLogger(log)), nil
 }
 
 func renderOutput(format string, data interface{}, tableFunc func()) error {

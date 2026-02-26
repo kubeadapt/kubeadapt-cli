@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
@@ -21,6 +23,7 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+	logger     *zap.Logger
 }
 
 // Option configures the Client.
@@ -40,6 +43,13 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
+// WithLogger sets the debug logger.
+func WithLogger(l *zap.Logger) Option {
+	return func(c *Client) {
+		c.logger = l
+	}
+}
+
 // NewClient creates a new API client.
 func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	c := &Client{
@@ -48,6 +58,7 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 		httpClient: &http.Client{
 			Timeout: defaultTimeout,
 		},
+		logger: zap.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -56,6 +67,9 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 }
 
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+	start := time.Now()
+	c.logger.Debug("API request", zap.String("method", method), zap.String("path", path))
+
 	u := strings.TrimRight(c.baseURL, "/") + path
 
 	var bodyReader io.Reader
@@ -94,8 +108,19 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		if err := json.Unmarshal(respBody, apiErr); err != nil {
 			apiErr.Message = string(respBody)
 		}
+		c.logger.Debug("API error",
+			zap.String("path", path),
+			zap.Int("status", resp.StatusCode),
+			zap.Duration("duration", time.Since(start)),
+		)
 		return apiErr
 	}
+
+	c.logger.Debug("API response",
+		zap.String("path", path),
+		zap.Int("status", resp.StatusCode),
+		zap.Duration("duration", time.Since(start)),
+	)
 
 	if result != nil && resp.StatusCode != http.StatusNoContent {
 		if err := json.Unmarshal(respBody, result); err != nil {

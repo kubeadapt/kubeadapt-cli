@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"go.uber.org/zap"
+
 	"github.com/kubeadapt/kubeadapt-cli/internal/config"
+	"github.com/kubeadapt/kubeadapt-cli/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +19,7 @@ var (
 	noColor   bool
 	verbose   bool
 	cfg       *config.Config
+	log       *zap.Logger
 )
 
 var rootCmd = &cobra.Command{
@@ -51,6 +55,12 @@ var rootCmd = &cobra.Command{
 			cfg.APIKey = apiKey
 		}
 
+		var logErr error
+		log, logErr = logger.New(verbose)
+		if logErr != nil {
+			return fmt.Errorf("initializing logger: %w", logErr)
+		}
+
 		return nil
 	},
 }
@@ -59,6 +69,9 @@ func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+	if log != nil {
+		_ = log.Sync()
 	}
 }
 
