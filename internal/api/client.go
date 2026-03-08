@@ -366,13 +366,6 @@ func (c *Client) GetWorkloadNodes(ctx context.Context, workloadUID, clusterID st
 	return &resp, err
 }
 
-// GetCapacityPlanning fetches capacity planning data for a cluster.
-func (c *Client) GetCapacityPlanning(ctx context.Context, clusterID string) (*types.CapacityPlanningResponse, error) {
-	var resp types.CapacityPlanningResponse
-	err := c.get(ctx, "/v1/clusters/"+clusterID+"/capacity-planning", nil, &resp)
-	return &resp, err
-}
-
 // GetNamespaceDetails fetches detailed namespace information.
 func (c *Client) GetNamespaceDetails(ctx context.Context, name, clusterID string) (*types.NamespaceDetailResponse, error) {
 	params := url.Values{}

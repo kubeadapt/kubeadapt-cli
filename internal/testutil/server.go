@@ -60,14 +60,6 @@ func NewMockServer() *httptest.Server {
 				return
 			}
 		}
-		if strings.HasSuffix(id, "/capacity-planning") {
-			clusterID := strings.TrimSuffix(id, "/capacity-planning")
-			if _, ok := clustersByID[clusterID]; ok {
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(SampleCapacityPlanning())
-				return
-			}
-		}
 		if cluster, ok := clustersByID[id]; ok {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(cluster)

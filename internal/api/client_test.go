@@ -224,29 +224,6 @@ func TestGetClusterDashboard(t *testing.T) {
 	}
 }
 
-func TestGetCapacityPlanning(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetCapacityPlanning(context.Background(), "cls-001")
-	if err != nil {
-		t.Fatalf("GetCapacityPlanning() error: %v", err)
-	}
-	if resp.ClusterID != "cls-001" {
-		t.Errorf("expected cluster ID 'cls-001', got %q", resp.ClusterID)
-	}
-	if resp.SpotVsOnDemand.Total != 10 {
-		t.Errorf("expected 10 total nodes, got %d", resp.SpotVsOnDemand.Total)
-	}
-	if resp.PodDensity.TotalPods != 85 {
-		t.Errorf("expected 85 total pods, got %d", resp.PodDensity.TotalPods)
-	}
-	if len(resp.NodeGroups) != 2 {
-		t.Errorf("expected 2 node groups, got %d", len(resp.NodeGroups))
-	}
-}
-
 func TestGetCluster404(t *testing.T) {
 	server := testutil.NewMockServer()
 	defer server.Close()
