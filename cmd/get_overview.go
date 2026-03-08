@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -16,7 +14,7 @@ var getOverviewCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := client.GetOverview(context.Background())
+		resp, err := client.GetOverview(cmd.Context())
 		if err != nil {
 			return err
 		}

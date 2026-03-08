@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +16,7 @@ var getDashboardCmd = &cobra.Command{
 
 		days, _ := cmd.Flags().GetInt("days")
 
-		resp, err := client.GetDashboard(context.Background(), days)
+		resp, err := client.GetDashboard(cmd.Context(), days)
 		if err != nil {
 			return err
 		}

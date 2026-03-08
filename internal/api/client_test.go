@@ -80,8 +80,8 @@ func TestUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unauthorized request")
 	}
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
 	if !apiErr.IsAuthError() {
@@ -256,8 +256,8 @@ func TestGetCluster404(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent cluster")
 	}
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
 		t.Fatalf("expected *APIError, got %T", err)
 	}
 	if !apiErr.IsNotFound() {

@@ -17,7 +17,7 @@ func newAPIClient() (*api.Client, error) {
 	return api.NewClient(cfg.APIURL, cfg.APIKey, api.WithLogger(log)), nil
 }
 
-func renderOutput(format string, data interface{}, tableFunc func()) error {
+func renderOutput(format string, data any, tableFunc func()) error {
 	switch format {
 	case "json":
 		return output.JSON(data)
