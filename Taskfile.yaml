@@ -14,7 +14,7 @@ tasks:
       - cp dist/kubeadapt-cli_*/* bin/kubeadapt-cli
 
   build-all:
-    desc: Build binaries for all supported platforms (linux, darwin, windows — amd64, arm64)
+    desc: Build binaries for all supported platforms (linux, darwin, windows - amd64, arm64)
     cmds:
       - goreleaser build --snapshot --clean
 
