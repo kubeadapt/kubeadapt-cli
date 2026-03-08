@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +21,7 @@ var getCostsTeamsCmd = &cobra.Command{
 
 		clusterID, _ := cmd.Flags().GetString("cluster-id")
 
-		resp, err := client.GetCostsTeams(context.Background(), clusterID)
+		resp, err := client.GetCostsTeams(cmd.Context(), clusterID)
 		if err != nil {
 			return err
 		}

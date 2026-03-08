@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +18,7 @@ var getNamespacesCmd = &cobra.Command{
 		team, _ := cmd.Flags().GetString("team")
 		department, _ := cmd.Flags().GetString("department")
 
-		resp, err := client.GetNamespaces(context.Background(), clusterID, team, department)
+		resp, err := client.GetNamespaces(cmd.Context(), clusterID, team, department)
 		if err != nil {
 			return err
 		}

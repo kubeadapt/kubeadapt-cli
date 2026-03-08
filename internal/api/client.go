@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,7 +67,7 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	return c
 }
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+func (c *Client) doRequest(ctx context.Context, method, path string, body any, result any) error {
 	start := time.Now()
 	c.logger.Debug("API request", zap.String("method", method), zap.String("path", path))
 
@@ -131,7 +132,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	return nil
 }
 
-func (c *Client) get(ctx context.Context, path string, params url.Values, result interface{}) error {
+func (c *Client) get(ctx context.Context, path string, params url.Values, result any) error {
 	if len(params) > 0 {
 		path = path + "?" + params.Encode()
 	}
@@ -149,7 +150,7 @@ func (c *Client) GetOverview(ctx context.Context) (*types.OverviewResponse, erro
 func (c *Client) GetDashboard(ctx context.Context, days int) (*types.DashboardResponse, error) {
 	params := url.Values{}
 	if days > 0 {
-		params.Set("days", fmt.Sprintf("%d", days))
+		params.Set("days", strconv.Itoa(days))
 	}
 	var resp types.DashboardResponse
 	err := c.get(ctx, "/v1/dashboard", params, &resp)
@@ -183,10 +184,10 @@ func (c *Client) GetWorkloads(ctx context.Context, clusterID, namespace, kind st
 		params.Set("kind", kind)
 	}
 	if limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("limit", strconv.Itoa(limit))
 	}
 	if offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", offset))
+		params.Set("offset", strconv.Itoa(offset))
 	}
 	var resp types.WorkloadListResponse
 	err := c.get(ctx, "/v1/workloads", params, &resp)
@@ -203,10 +204,10 @@ func (c *Client) GetNodes(ctx context.Context, clusterID, nodeGroup string, limi
 		params.Set("node_group", nodeGroup)
 	}
 	if limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("limit", strconv.Itoa(limit))
 	}
 	if offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", offset))
+		params.Set("offset", strconv.Itoa(offset))
 	}
 	var resp types.NodeListResponse
 	err := c.get(ctx, "/v1/nodes", params, &resp)
@@ -226,10 +227,10 @@ func (c *Client) GetRecommendations(ctx context.Context, clusterID, recType, sta
 		params.Set("status", status)
 	}
 	if limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("limit", strconv.Itoa(limit))
 	}
 	if offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", offset))
+		params.Set("offset", strconv.Itoa(offset))
 	}
 	var resp types.RecommendationListResponse
 	err := c.get(ctx, "/v1/recommendations", params, &resp)

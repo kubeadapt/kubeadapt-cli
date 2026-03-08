@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +20,7 @@ var getWorkloadsCmd = &cobra.Command{
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
 
-		resp, err := client.GetWorkloads(context.Background(), clusterID, namespace, kind, limit, offset)
+		resp, err := client.GetWorkloads(cmd.Context(), clusterID, namespace, kind, limit, offset)
 		if err != nil {
 			return err
 		}

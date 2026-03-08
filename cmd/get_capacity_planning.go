@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,11 +15,8 @@ var getCapacityPlanningCmd = &cobra.Command{
 		}
 
 		clusterID, _ := cmd.Flags().GetString("cluster-id")
-		if clusterID == "" {
-			return fmt.Errorf("--cluster-id is required")
-		}
 
-		resp, err := client.GetCapacityPlanning(context.Background(), clusterID)
+		resp, err := client.GetCapacityPlanning(cmd.Context(), clusterID)
 		if err != nil {
 			return err
 		}

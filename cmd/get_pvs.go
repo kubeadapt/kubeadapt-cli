@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +19,7 @@ var getPVsCmd = &cobra.Command{
 		namespace, _ := cmd.Flags().GetString("namespace")
 		storageClass, _ := cmd.Flags().GetString("storage-class")
 
-		resp, err := client.GetPersistentVolumes(context.Background(), clusterID, namespace, storageClass)
+		resp, err := client.GetPersistentVolumes(cmd.Context(), clusterID, namespace, storageClass)
 		if err != nil {
 			return err
 		}
