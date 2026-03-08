@@ -75,7 +75,7 @@ func RenderOverview(o *types.OverviewResponse, noColor bool) {
 
 // RenderClusters renders a list of clusters as a styled table.
 func RenderClusters(clusters []types.ClusterResponse, noColor bool) {
-	headers := []string{"ID", "Name", "Provider", "Region", "Status", "Nodes", "Efficiency", "Monthly $", "Savings", "$/hr"}
+	headers := []string{"ID", "Name", "Provider", "Region", "Status", "Nodes", "Efficiency", "Monthly $", "Potential Savings", "$/hr"}
 	rows := make([][]string, 0, len(clusters))
 	for _, c := range clusters {
 		rows = append(rows, []string{
@@ -92,6 +92,7 @@ func RenderClusters(clusters []types.ClusterResponse, noColor bool) {
 		})
 	}
 	renderTable(headers, rows, noColor)
+	fmt.Fprintln(os.Stdout, StyleMuted.Render("Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io"))
 }
 
 // RenderCluster renders a single cluster as a detail table.
@@ -256,60 +257,6 @@ func RenderNamespaces(namespaces []types.NamespaceResponse, noColor bool) {
 		})
 	}
 	renderTable(headers, rows, noColor)
-}
-
-// RenderCapacityPlanning renders capacity planning data.
-func RenderCapacityPlanning(cp *types.CapacityPlanningResponse, noColor bool) {
-	fmt.Fprintln(os.Stdout, "Capacity Planning - "+cp.ClusterID)
-	fmt.Fprintln(os.Stdout)
-
-	spotHeaders := []string{"Metric", "Value"}
-	spotRows := [][]string{
-		{"Total Nodes", FormatInt(cp.SpotVsOnDemand.Total)},
-		{"Spot", fmt.Sprintf("%d (%.1f%%)", cp.SpotVsOnDemand.SpotCount, cp.SpotVsOnDemand.SpotPercent)},
-		{"On-Demand", fmt.Sprintf("%d (%.1f%%)", cp.SpotVsOnDemand.OnDemandCount, cp.SpotVsOnDemand.OnDemandPercent)},
-	}
-	renderTable(spotHeaders, spotRows, noColor)
-	fmt.Fprintln(os.Stdout)
-
-	podHeaders := []string{"Metric", "Value"}
-	podRows := [][]string{
-		{"Total Pods", FormatInt(cp.PodDensity.TotalPods)},
-		{"Total Nodes", FormatInt(cp.PodDensity.TotalNodes)},
-		{"Avg Pods/Node", FormatFloat(cp.PodDensity.AvgPodsPerNode, 1)},
-		{"Max Pods/Node", FormatInt(cp.PodDensity.MaxPodsPerNode)},
-	}
-	renderTable(podHeaders, podRows, noColor)
-	fmt.Fprintln(os.Stdout)
-
-	if len(cp.NodeGroups) > 0 {
-		ngHeaders := []string{"Name", "Instance", "Count", "Spot %", "$/hr"}
-		ngRows := make([][]string, 0, len(cp.NodeGroups))
-		for _, ng := range cp.NodeGroups {
-			ngRows = append(ngRows, []string{
-				ng.Name,
-				FormatOptionalString(ng.InstanceType),
-				FormatInt(ng.Count),
-				FormatPercent(ng.SpotPercent),
-				FormatCost(ng.HourlyCost),
-			})
-		}
-		renderTable(ngHeaders, ngRows, noColor)
-		fmt.Fprintln(os.Stdout)
-	}
-
-	if len(cp.CostByAZ) > 0 {
-		azHeaders := []string{"Zone", "Nodes", "$/hr"}
-		azRows := make([][]string, 0, len(cp.CostByAZ))
-		for _, az := range cp.CostByAZ {
-			azRows = append(azRows, []string{
-				az.Zone,
-				FormatInt(az.NodeCount),
-				FormatCost(az.HourlyCost),
-			})
-		}
-		renderTable(azHeaders, azRows, noColor)
-	}
 }
 
 // RenderPersistentVolumes renders persistent volumes as a styled table.

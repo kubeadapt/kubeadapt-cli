@@ -271,30 +271,6 @@ func SampleClusterDashboard() *types.ClusterDashboardResponse {
 	}
 }
 
-// SampleCapacityPlanning returns a sample capacity planning response.
-func SampleCapacityPlanning() *types.CapacityPlanningResponse {
-	return &types.CapacityPlanningResponse{
-		ClusterID: "cls-001",
-		NodesByOS: []types.NodeByOS{
-			{OS: "linux", Count: 10, Percentage: 100.0},
-		},
-		SpotVsOnDemand: types.SpotVsOnDemand{
-			SpotCount: 3, SpotPercent: 30.0, OnDemandCount: 7, OnDemandPercent: 70.0, Total: 10,
-		},
-		PodDensity: types.PodDensity{
-			TotalPods: 85, TotalNodes: 10, AvgPodsPerNode: 8.5, MaxPodsPerNode: 15,
-		},
-		CostByAZ: []types.CostByAZ{
-			{Zone: "us-east-1a", HourlyCost: 4.20, NodeCount: 5},
-			{Zone: "us-east-1b", HourlyCost: 4.30, NodeCount: 5},
-		},
-		NodeGroups: []types.NodeGroupSummary{
-			{Name: "general-purpose", InstanceType: StringPtr("m5.xlarge"), Count: 7, HourlyCost: 6.72, SpotPercent: 14.3},
-			{Name: "compute-optimized", InstanceType: StringPtr("c5.2xlarge"), Count: 3, HourlyCost: 1.78, SpotPercent: 66.7},
-		},
-	}
-}
-
 // SampleRecommendations returns sample recommendation data.
 func SampleRecommendations() []types.RecommendationResponse {
 	return []types.RecommendationResponse{
