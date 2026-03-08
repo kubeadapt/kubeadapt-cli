@@ -69,7 +69,7 @@ brews:
       email: platform-assistant[bot]@users.noreply.github.com
     commit_msg_template: "chore(deps): update formula for {{ .ProjectName }} {{ .Tag }}"
     homepage: "https://kubeadapt.io"
-    description: "Replace with your CLI description"
+    description: "KubeAdapt CLI for Kubernetes cost optimization"
     license: "Apache-2.0"
     install: |
       bin.install "kubeadapt-cli"
@@ -100,5 +100,5 @@ brews:
 #       email: platform-assistant[bot]@users.noreply.github.com
 #     commit_msg_template: "chore(deps): update krew manifest for {{ .ProjectName }} {{ .Tag }}"
 #     homepage: "https://kubeadapt.io"
-#     description: "Replace with your CLI description"
-#     short_description: "Replace with a short description (max 50 chars)"
+#     description: "KubeAdapt CLI for Kubernetes cost optimization"
+#     short_description: "Kubernetes cost optimization CLI"

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +16,7 @@ var getNodeGroupsCmd = &cobra.Command{
 
 		clusterID, _ := cmd.Flags().GetString("cluster-id")
 
-		resp, err := client.GetNodeGroups(context.Background(), clusterID)
+		resp, err := client.GetNodeGroups(cmd.Context(), clusterID)
 		if err != nil {
 			return err
 		}

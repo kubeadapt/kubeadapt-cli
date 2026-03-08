@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +15,7 @@ var getClusterCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := client.GetCluster(context.Background(), args[0])
+		resp, err := client.GetCluster(cmd.Context(), args[0])
 		if err != nil {
 			return err
 		}

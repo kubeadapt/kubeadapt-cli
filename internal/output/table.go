@@ -260,7 +260,7 @@ func RenderNamespaces(namespaces []types.NamespaceResponse, noColor bool) {
 
 // RenderCapacityPlanning renders capacity planning data.
 func RenderCapacityPlanning(cp *types.CapacityPlanningResponse, noColor bool) {
-	fmt.Fprintln(os.Stdout, "Capacity Planning — "+cp.ClusterID)
+	fmt.Fprintln(os.Stdout, "Capacity Planning - "+cp.ClusterID)
 	fmt.Fprintln(os.Stdout)
 
 	spotHeaders := []string{"Metric", "Value"}

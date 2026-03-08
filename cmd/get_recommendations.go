@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +20,7 @@ var getRecommendationsCmd = &cobra.Command{
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
 
-		resp, err := client.GetRecommendations(context.Background(), clusterID, recType, status, limit, offset)
+		resp, err := client.GetRecommendations(cmd.Context(), clusterID, recType, status, limit, offset)
 		if err != nil {
 			return err
 		}
