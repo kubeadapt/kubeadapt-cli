@@ -1,8 +1,23 @@
 # KubeAdapt CLI
 
-Command-line interface and interactive TUI for the [KubeAdapt](https://kubeadapt.com) Kubernetes cost optimization platform.
+Command-line interface for the [KubeAdapt](https://kubeadapt.com) Kubernetes cost optimization platform.
 
 ## Installation
+
+### Homebrew
+
+```bash
+brew install kubeadapt/tap/kubeadapt-cli
+
+# Upgrade to latest version
+brew upgrade kubeadapt/tap/kubeadapt-cli
+```
+
+### Install Script
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kubeadapt/kubeadapt-cli/main/scripts/install.sh | bash
+```
 
 ### From Source
 
@@ -10,18 +25,12 @@ Command-line interface and interactive TUI for the [KubeAdapt](https://kubeadapt
 go install github.com/kubeadapt/kubeadapt-cli@latest
 ```
 
-### From Release
-
-```bash
-curl -sSL https://raw.githubusercontent.com/kubeadapt/kubeadapt-cli/main/scripts/install.sh | bash
-```
-
 ### Build from Source
 
 ```bash
 git clone https://github.com/kubeadapt/kubeadapt-cli.git
 cd kubeadapt-cli
-make build
+task build
 ```
 
 ## Quick Start
@@ -36,8 +45,8 @@ kubeadapt get overview
 # List clusters
 kubeadapt get clusters
 
-# Launch interactive TUI
-kubeadapt tui
+# View cost optimization recommendations
+kubeadapt get recommendations
 ```
 
 ## Commands
@@ -54,6 +63,7 @@ kubeadapt auth logout         # Remove stored credentials
 
 ```bash
 kubeadapt get overview             # Organization dashboard
+kubeadapt get dashboard            # Organization dashboard with cost trends
 kubeadapt get clusters             # List all clusters
 kubeadapt get cluster <id>         # Single cluster details
 kubeadapt get workloads            # List workloads
@@ -64,46 +74,36 @@ kubeadapt get costs departments    # Cost breakdown by department
 kubeadapt get node-groups          # List node groups
 kubeadapt get namespaces           # List namespaces
 kubeadapt get persistent-volumes   # List persistent volumes
-kubeadapt get integrations         # List integrations
-kubeadapt get integration <id>     # Single integration details
 ```
 
-### Integration Management
+Most `get` commands support optional filters:
 
 ```bash
-kubeadapt create integration --name "Slack Alerts" --type slack --config '{"channel":"#alerts"}'
-kubeadapt update integration <id> --enabled
-kubeadapt delete integration <id> --yes
+kubeadapt get workloads --cluster-id cls-001 --namespace default --kind Deployment
+kubeadapt get nodes --cluster-id cls-001 --limit 10
+kubeadapt get recommendations --type rightsizing --status active
+kubeadapt get dashboard --days 7
 ```
-
-### Interactive TUI
-
-```bash
-kubeadapt tui
-```
-
-Navigate with number keys (1-9), j/k for rows, Tab for sub-tabs, r to refresh, ? for help, q to quit.
 
 ## Output Formats
 
-All `get` commands support `--output` flag:
+All `get` commands support the `--output` flag:
 
 ```bash
-kubeadapt get clusters --output table   # Default styled table
-kubeadapt get clusters --output json    # JSON
-kubeadapt get clusters --output yaml    # YAML
+kubeadapt get clusters -o table   # Default styled table
+kubeadapt get clusters -o json    # JSON
+kubeadapt get clusters -o yaml    # YAML
 ```
 
 ## Global Flags
 
-| Flag | Description |
-|------|-------------|
-| `--api-url` | KubeAdapt API URL |
-| `--api-key` | API key (overrides stored config) |
-| `--output` | Output format: table, json, yaml |
-| `--no-color` | Disable colored output |
-| `--config` | Config file path |
-| `--verbose` | Verbose output |
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--api-key` | | API key (overrides stored config) |
+| `--output` | `-o` | Output format: table, json, yaml |
+| `--no-color` | | Disable colored output |
+| `--verbose` | `-v` | Enable debug logging |
+| `--config` | | Config file path |
 
 ## Configuration
 
@@ -113,6 +113,8 @@ Config is stored at `~/.kubeadapt/config.yaml`:
 api_url: https://api.kubeadapt.com
 api_key: ka_your_api_key_here
 ```
+
+Environment variable `KUBEADAPT_API_KEY` overrides the stored config.
 
 ## Shell Completions
 
@@ -130,10 +132,11 @@ kubeadapt completion fish | source
 ## Development
 
 ```bash
-make build    # Build binary
-make test     # Run tests
-make lint     # Run linter
-make all      # Format, vet, lint, test, build
+task build    # Build binary
+task test     # Run tests with race detector
+task lint     # Run linter
+task fmt      # Format code
+task vuln     # Run vulnerability check
 ```
 
 ## License
