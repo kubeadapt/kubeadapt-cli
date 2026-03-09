@@ -1,23 +1,34 @@
-# replace-me
+# kubeadapt-cli
 
-Replace with a description of your CLI tool.
+Command-line interface for the [KubeAdapt](https://kubeadapt.com) Kubernetes cost optimization platform.
 
 ## Installation
 
+### Homebrew (recommended)
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/kubeadapt/replace-me/main/scripts/install.sh | bash
+brew install kubeadapt/tap/kubeadapt-cli
+
+# Upgrade to latest version
+brew upgrade kubeadapt/tap/kubeadapt-cli
 ```
 
-Or via `go install`:
+### Install Script
 
 ```bash
-go install github.com/kubeadapt/replace-me@latest
+curl -sSL https://raw.githubusercontent.com/kubeadapt/kubeadapt-cli/main/scripts/install.sh | bash
+```
+
+### From Source
+
+```bash
+go install github.com/kubeadapt/kubeadapt-cli@latest
 ```
 
 ## Usage
 
 ```bash
-replace-me [command] [flags]
+kubeadapt-cli [command] [flags]
 ```
 
 ### Global Flags
@@ -25,27 +36,38 @@ replace-me [command] [flags]
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--output` | `-o` | `table` | Output format: `table`, `json`, `yaml` |
-| `--verbose` | `-v` | `false` | Enable verbose output |
+| `--verbose` | `-v` | `false` | Enable debug logging |
+| `--api-key` | | | API key (overrides stored config) |
+| `--no-color` | | `false` | Disable colored output |
 | `--config` | | | Config file path |
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
+| `auth login` | Store API key |
+| `auth status` | Show current auth status |
+| `auth logout` | Remove stored credentials |
+| `get overview` | Organization dashboard |
+| `get clusters` | List all clusters |
+| `get workloads` | List workloads |
+| `get recommendations` | Cost optimization suggestions |
+| `get costs teams` | Cost breakdown by team |
+| `get costs departments` | Cost breakdown by department |
 | `version` | Print version information |
 | `completion` | Generate shell completion scripts |
-| `help` | Help about any command |
 
 ## Configuration
 
-Config file is loaded from `$HOME/.replace-me/config.yaml` by default.
+Config file is stored at `~/.kubeadapt/config.yaml`.
+
+Environment variable `KUBEADAPT_API_KEY` overrides the stored config.
 
 ## Development
 
 ```bash
-task test          # Run tests
+task test          # Run tests with race detector
 task lint          # Run linter
 task build         # Build for current platform
 task build-all     # Build for all platforms
-task release-local # Build full release snapshot locally
 ```

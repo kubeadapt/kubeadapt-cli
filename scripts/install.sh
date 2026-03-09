@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-REPO="kubeadapt/replace-me"
-BINARY_NAME="replace-me"
+REPO="kubeadapt/kubeadapt-cli"
+BINARY_NAME="kubeadapt-cli"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # Detect OS and architecture

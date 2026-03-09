@@ -1,5 +1,5 @@
 site_name: CLI Documentation
-site_description: Auto-generated documentation site
+site_description: KubeAdapt CLI documentation
 
 nav:
   - Home: index.md
