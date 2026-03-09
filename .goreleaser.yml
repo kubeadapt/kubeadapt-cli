@@ -65,8 +65,8 @@ brews:
       owner: kubeadapt
       name: homebrew-tap
     commit_author:
-      name: platform-assistant[bot]
-      email: platform-assistant[bot]@users.noreply.github.com
+      name: kubeadapt-platform-assistant[bot]
+      email: kubeadapt-platform-assistant[bot]@users.noreply.github.com
     commit_msg_template: "chore(deps): update formula for {{ .ProjectName }} {{ .Tag }}"
     homepage: "https://kubeadapt.io"
     description: "KubeAdapt CLI for Kubernetes cost optimization"
