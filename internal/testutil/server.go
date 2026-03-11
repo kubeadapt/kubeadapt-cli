@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
 func validAuth(r *http.Request) bool {
@@ -18,7 +20,7 @@ func MockHandler(statusCode int, response interface{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validAuth(r) {
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "API key required. Use 'Authorization: Bearer <api_key>'"})
 			return
 		}
 
@@ -48,7 +50,7 @@ func NewMockServer() *httptest.Server {
 	mux.HandleFunc("/v1/clusters/", func(w http.ResponseWriter, r *http.Request) {
 		if !validAuth(r) {
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Missing authorization"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "API key required. Use 'Authorization: Bearer <api_key>'"})
 			return
 		}
 		id := strings.TrimPrefix(r.URL.Path, "/v1/clusters/")
@@ -86,19 +88,21 @@ func NewMockServer() *httptest.Server {
 		"total_potential_savings_monthly": 26.64,
 	}))
 
-	mux.HandleFunc("/v1/costs/teams", MockHandler(http.StatusOK, map[string]interface{}{
-		"teams": []interface{}{},
-		"total": 0,
+	mux.HandleFunc("/v1/costs/teams", MockHandler(http.StatusOK, types.TeamCostListResponse{
+		Teams:   SampleTeamCosts(),
+		Total:   len(SampleTeamCosts()),
+		Summary: types.CostSummary{TotalHourlyCost: 0.38, TotalMonthlyCost: 277.40},
 	}))
 
-	mux.HandleFunc("/v1/costs/departments", MockHandler(http.StatusOK, map[string]interface{}{
-		"departments": []interface{}{},
-		"total":       0,
+	mux.HandleFunc("/v1/costs/departments", MockHandler(http.StatusOK, types.DepartmentCostListResponse{
+		Departments: SampleDepartmentCosts(),
+		Total:       len(SampleDepartmentCosts()),
+		Summary:     types.CostSummary{TotalHourlyCost: 0.77, TotalMonthlyCost: 562.10},
 	}))
 
-	mux.HandleFunc("/v1/node-groups", MockHandler(http.StatusOK, map[string]interface{}{
-		"node_groups": []interface{}{},
-		"total":       0,
+	mux.HandleFunc("/v1/node-groups", MockHandler(http.StatusOK, types.NodeGroupListResponse{
+		NodeGroups: SampleNodeGroups(),
+		Total:      len(SampleNodeGroups()),
 	}))
 
 	mux.HandleFunc("/v1/namespaces", MockHandler(http.StatusOK, map[string]interface{}{
@@ -111,9 +115,10 @@ func NewMockServer() *httptest.Server {
 		},
 	}))
 
-	mux.HandleFunc("/v1/persistent-volumes", MockHandler(http.StatusOK, map[string]interface{}{
-		"persistent_volumes": []interface{}{},
-		"total":              0,
+	mux.HandleFunc("/v1/persistent-volumes", MockHandler(http.StatusOK, types.PersistentVolumeListResponse{
+		PersistentVolumes: SamplePersistentVolumes(),
+		Total:             len(SamplePersistentVolumes()),
+		Summary:           types.PVSummary{TotalCapacityGB: 120.0, TotalHourlyCost: 0.016},
 	}))
 
 	mux.HandleFunc("/v1/dashboard", MockHandler(http.StatusOK, SampleDashboard()))
