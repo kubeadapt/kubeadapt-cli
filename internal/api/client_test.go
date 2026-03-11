@@ -451,8 +451,20 @@ func TestGetCostsTeams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCostsTeams() error: %v", err)
 	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
+	if len(resp.Teams) != 2 {
+		t.Errorf("expected 2 teams, got %d", len(resp.Teams))
+	}
+	if resp.Teams[0].Team != "platform" {
+		t.Errorf("expected first team 'platform', got %q", resp.Teams[0].Team)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+	if resp.Summary.TotalHourlyCost == 0 {
+		t.Error("expected non-zero TotalHourlyCost in summary")
+	}
+	if resp.Summary.TotalMonthlyCost == 0 {
+		t.Error("expected non-zero TotalMonthlyCost in summary")
 	}
 }
 
@@ -465,8 +477,20 @@ func TestGetPersistentVolumes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPersistentVolumes() error: %v", err)
 	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
+	if len(resp.PersistentVolumes) != 2 {
+		t.Errorf("expected 2 persistent volumes, got %d", len(resp.PersistentVolumes))
+	}
+	if resp.PersistentVolumes[0].Name != "pvc-prometheus-data" {
+		t.Errorf("expected first PV 'pvc-prometheus-data', got %q", resp.PersistentVolumes[0].Name)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+	if resp.Summary.TotalCapacityGB == 0 {
+		t.Error("expected non-zero TotalCapacityGB in summary")
+	}
+	if resp.Summary.TotalHourlyCost == 0 {
+		t.Error("expected non-zero TotalHourlyCost in summary")
 	}
 }
 
@@ -479,8 +503,20 @@ func TestGetNodeGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetNodeGroups() error: %v", err)
 	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
+	if len(resp.NodeGroups) != 2 {
+		t.Errorf("expected 2 node groups, got %d", len(resp.NodeGroups))
+	}
+	if resp.NodeGroups[0].Name != "general-purpose" {
+		t.Errorf("expected first node group 'general-purpose', got %q", resp.NodeGroups[0].Name)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+	if resp.NodeGroups[0].HourlyCost == nil {
+		t.Error("expected HourlyCost to be non-nil")
+	}
+	if resp.NodeGroups[0].TotalCPUCores == nil {
+		t.Error("expected TotalCPUCores to be non-nil")
 	}
 }
 
@@ -655,8 +691,20 @@ func TestGetCostsDepartments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCostsDepartments() error: %v", err)
 	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
+	if len(resp.Departments) != 2 {
+		t.Errorf("expected 2 departments, got %d", len(resp.Departments))
+	}
+	if resp.Departments[0].Department != "engineering" {
+		t.Errorf("expected first department 'engineering', got %q", resp.Departments[0].Department)
+	}
+	if resp.Total != 2 {
+		t.Errorf("expected total 2, got %d", resp.Total)
+	}
+	if resp.Summary.TotalHourlyCost == 0 {
+		t.Error("expected non-zero TotalHourlyCost in summary")
+	}
+	if resp.Summary.TotalMonthlyCost == 0 {
+		t.Error("expected non-zero TotalMonthlyCost in summary")
 	}
 }
 
