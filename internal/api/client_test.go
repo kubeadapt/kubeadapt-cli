@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
@@ -239,5 +242,128 @@ func TestGetCluster404(t *testing.T) {
 	}
 	if !apiErr.IsNotFound() {
 		t.Errorf("expected not found error, got status %d", apiErr.StatusCode)
+	}
+}
+
+func TestClient_Forbidden(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "forbidden"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if !apiErr.IsForbidden() {
+		t.Errorf("expected IsForbidden(), status=%d", apiErr.StatusCode)
+	}
+}
+
+func TestClient_RateLimited(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "rate limited"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if !apiErr.IsRateLimited() {
+		t.Errorf("expected IsRateLimited(), status=%d", apiErr.StatusCode)
+	}
+}
+
+func TestClient_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "internal server error"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if !apiErr.IsServerError() {
+		t.Errorf("expected IsServerError(), status=%d", apiErr.StatusCode)
+	}
+}
+
+func TestClient_MalformedJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid json`))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error for malformed JSON response")
+	}
+}
+
+func TestClient_NetworkError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	server.Close() // close before making the request
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error for network failure")
+	}
+	_, ok := errors.AsType[*APIError](err)
+	if ok {
+		t.Errorf("expected non-*APIError for network error, got *APIError")
+	}
+}
+
+func TestClient_ContextCancelled(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := client.GetOverview(ctx)
+	if err == nil {
+		t.Fatal("expected error for canceled context")
+	}
+}
+
+func TestClient_NonJSONErrorBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("server fault"))
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.Message != "server fault" {
+		t.Errorf("expected Message 'server fault', got %q", apiErr.Message)
 	}
 }
