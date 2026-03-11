@@ -1,0 +1,20 @@
+=== RUN   TestLoadInvalidYAML
+--- PASS: TestLoadInvalidYAML (0.00s)
+=== RUN   TestSaveCreatesDirectory
+--- PASS: TestSaveCreatesDirectory (0.00s)
+=== RUN   TestLoadEmptyFile
+--- PASS: TestLoadEmptyFile (0.00s)
+=== RUN   TestSaveAndLoadPreservesEmptyKey
+--- PASS: TestSaveAndLoadPreservesEmptyKey (0.00s)
+=== RUN   TestDefaultPath
+--- PASS: TestDefaultPath (0.00s)
+=== RUN   TestMaskAPIKey_Boundary
+=== RUN   TestMaskAPIKey_Boundary/exactly_8_chars
+=== RUN   TestMaskAPIKey_Boundary/exactly_9_chars
+=== RUN   TestMaskAPIKey_Boundary/long_key
+--- PASS: TestMaskAPIKey_Boundary (0.00s)
+    --- PASS: TestMaskAPIKey_Boundary/exactly_8_chars (0.00s)
+    --- PASS: TestMaskAPIKey_Boundary/exactly_9_chars (0.00s)
+    --- PASS: TestMaskAPIKey_Boundary/long_key (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/config	1.019s

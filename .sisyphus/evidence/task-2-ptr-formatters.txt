@@ -1,0 +1,14 @@
+=== RUN   TestFormatCostPtr
+--- PASS: TestFormatCostPtr (0.00s)
+=== RUN   TestFormatPercentPtr
+--- PASS: TestFormatPercentPtr (0.00s)
+=== RUN   TestFormatOptionalString
+--- PASS: TestFormatOptionalString (0.00s)
+=== RUN   TestFormatFloatPtr
+--- PASS: TestFormatFloatPtr (0.00s)
+=== RUN   TestFormatMemoryGBPtr
+--- PASS: TestFormatMemoryGBPtr (0.00s)
+=== RUN   TestFormatIntPtr
+--- PASS: TestFormatIntPtr (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	1.016s

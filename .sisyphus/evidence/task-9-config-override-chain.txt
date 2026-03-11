@@ -1,0 +1,8 @@
+=== RUN   TestConfigOverrideChain_FlagOverridesEnv
+--- PASS: TestConfigOverrideChain_FlagOverridesEnv (0.00s)
+=== RUN   TestConfigOverrideChain_EnvOverridesConfig
+--- PASS: TestConfigOverrideChain_EnvOverridesConfig (0.00s)
+=== RUN   TestConfigOverrideChain_ConfigFallback
+--- PASS: TestConfigOverrideChain_ConfigFallback (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/cmd	1.023s

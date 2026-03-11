@@ -1,0 +1,17 @@
+=== RUN   TestClient_Forbidden
+--- PASS: TestClient_Forbidden (0.00s)
+=== RUN   TestClient_RateLimited
+--- PASS: TestClient_RateLimited (0.00s)
+=== RUN   TestClient_ServerError
+--- PASS: TestClient_ServerError (0.00s)
+=== RUN   TestClient_MalformedJSON
+--- PASS: TestClient_MalformedJSON (0.00s)
+=== RUN   TestClient_NetworkError
+--- PASS: TestClient_NetworkError (0.00s)
+=== RUN   TestClient_ContextCancelled
+--- PASS: TestClient_ContextCancelled (0.00s)
+=== RUN   TestClient_NonJSONErrorBody
+--- PASS: TestClient_NonJSONErrorBody (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	1.022s
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]

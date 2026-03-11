@@ -1,0 +1,4 @@
+=== RUN   TestShortID
+--- PASS: TestShortID (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	1.016s

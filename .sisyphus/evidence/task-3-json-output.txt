@@ -1,0 +1,8 @@
+=== RUN   TestJSONTo_ValidStruct
+--- PASS: TestJSONTo_ValidStruct (0.00s)
+=== RUN   TestJSONTo_NilFields
+--- PASS: TestJSONTo_NilFields (0.00s)
+=== RUN   TestJSONTo_EmptySlice
+--- PASS: TestJSONTo_EmptySlice (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	1.026s

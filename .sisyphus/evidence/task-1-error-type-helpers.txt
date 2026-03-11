@@ -1,0 +1,15 @@
+=== RUN   TestAPIError_Error
+--- PASS: TestAPIError_Error (0.00s)
+=== RUN   TestAPIError_IsAuthError
+--- PASS: TestAPIError_IsAuthError (0.00s)
+=== RUN   TestAPIError_IsForbidden
+--- PASS: TestAPIError_IsForbidden (0.00s)
+=== RUN   TestAPIError_IsNotFound
+--- PASS: TestAPIError_IsNotFound (0.00s)
+=== RUN   TestAPIError_IsRateLimited
+--- PASS: TestAPIError_IsRateLimited (0.00s)
+=== RUN   TestAPIError_IsServerError
+--- PASS: TestAPIError_IsServerError (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	1.016s
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]

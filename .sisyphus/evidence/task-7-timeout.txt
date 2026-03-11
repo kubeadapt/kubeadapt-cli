@@ -1,0 +1,5 @@
+=== RUN   TestClient_WithTimeout
+--- PASS: TestClient_WithTimeout (0.05s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	1.068s
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]

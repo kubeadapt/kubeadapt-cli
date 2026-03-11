@@ -1,0 +1,6 @@
+=== RUN   TestYAMLTo_ValidStruct
+--- PASS: TestYAMLTo_ValidStruct (0.00s)
+=== RUN   TestYAMLTo_NilFields
+--- PASS: TestYAMLTo_NilFields (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	1.018s
