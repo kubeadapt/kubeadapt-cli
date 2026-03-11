@@ -3,19 +3,24 @@ package output
 import (
 	"testing"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
 )
 
 func TestRenderOverview(t *testing.T) {
 	overview := testutil.SampleOverview()
-	// Should not panic
+	// Should not panic with noColor=true
 	RenderOverview(overview, true)
+	// Should not panic with noColor=false
+	RenderOverview(overview, false)
 }
 
 func TestRenderClusters(t *testing.T) {
 	clusters := testutil.SampleClusters()
-	// Should not panic
+	// Should not panic with normal data
 	RenderClusters(clusters, true)
+	// Should not panic with empty slice
+	RenderClusters([]types.ClusterResponse{}, true)
 }
 
 func TestFormatCost(t *testing.T) {
@@ -232,4 +237,45 @@ func TestShortID(t *testing.T) {
 			t.Errorf("ShortID(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
+}
+
+func TestRenderNodes(t *testing.T) {
+	nodes := testutil.SampleNodes()
+	// Should not panic with normal data
+	RenderNodes(nodes, true)
+	// Should not panic with noColor=false
+	RenderNodes(nodes, false)
+}
+
+func TestRenderWorkloads(t *testing.T) {
+	workloads := testutil.SampleWorkloads()
+	RenderWorkloads(workloads, true)
+}
+
+func TestRenderRecommendations(t *testing.T) {
+	recs := testutil.SampleRecommendations()
+	RenderRecommendations(recs, true)
+}
+
+func TestRenderNamespaces(t *testing.T) {
+	namespaces := testutil.SampleNamespaces()
+	RenderNamespaces(namespaces, true)
+}
+
+func TestRenderDashboard(t *testing.T) {
+	dashboard := testutil.SampleDashboard()
+	RenderDashboard(dashboard, true)
+}
+
+func TestRender_EmptyData(t *testing.T) {
+	// All render functions should handle empty slices without panic
+	RenderClusters([]types.ClusterResponse{}, true)
+	RenderNodes([]types.NodeResponse{}, true)
+	RenderWorkloads([]types.WorkloadResponse{}, true)
+	RenderRecommendations([]types.RecommendationResponse{}, true)
+	RenderNamespaces([]types.NamespaceResponse{}, true)
+	RenderTeamCosts([]types.TeamCostResponse{}, true)
+	RenderDepartmentCosts([]types.DepartmentCostResponse{}, true)
+	RenderNodeGroups([]types.NodeGroupResponse{}, true)
+	RenderPersistentVolumes([]types.PersistentVolumeResponse{}, true)
 }

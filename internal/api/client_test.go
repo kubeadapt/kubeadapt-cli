@@ -6,8 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
+	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
 )
 
@@ -365,5 +371,266 @@ func TestClient_NonJSONErrorBody(t *testing.T) {
 	}
 	if apiErr.Message != "server fault" {
 		t.Errorf("expected Message 'server fault', got %q", apiErr.Message)
+	}
+}
+
+func TestClient_204NoContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		// No body written
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	// get() is unexported but accessible in package api tests
+	var resp types.OverviewResponse
+	err := client.get(context.Background(), "/v1/overview", nil, &resp)
+	if err != nil {
+		t.Fatalf("expected no error for 204 response, got: %v", err)
+	}
+	// resp should be zero-valued (not populated)
+	if resp.ClusterCount != 0 {
+		t.Errorf("expected zero ClusterCount for 204 response, got %d", resp.ClusterCount)
+	}
+}
+
+func TestClient_WithTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key", WithTimeout(1*time.Millisecond))
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+}
+
+func TestClient_WithLogger(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+	client := NewClient(server.URL, "test-key", WithLogger(zap.NewNop()))
+	_, err := client.GetOverview(context.Background())
+	if err != nil {
+		t.Fatalf("WithLogger client error: %v", err)
+	}
+}
+
+func TestClient_EmptyResponseBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// write nothing
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetOverview(context.Background())
+	if err == nil {
+		t.Fatal("expected error for empty response body")
+	}
+}
+
+func TestGetCostsTeams(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetCostsTeams(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetCostsTeams() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetPersistentVolumes(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetPersistentVolumes(context.Background(), "", "", "")
+	if err != nil {
+		t.Fatalf("GetPersistentVolumes() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetNodeGroups(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetNodeGroups(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetNodeGroups() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetWorkloads_WithFilters(t *testing.T) {
+	var capturedParams url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth == "" || auth == "Bearer " {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		capturedParams = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"workloads": []any{},
+			"total":     0,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetWorkloads(context.Background(), "cls-001", "default", "Deployment", 10, 5)
+	if err != nil {
+		t.Fatalf("GetWorkloads() error: %v", err)
+	}
+
+	if capturedParams.Get("cluster_id") != "cls-001" {
+		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
+	}
+	if capturedParams.Get("namespace") != "default" {
+		t.Errorf("expected namespace=default, got %q", capturedParams.Get("namespace"))
+	}
+	if capturedParams.Get("kind") != "Deployment" {
+		t.Errorf("expected kind=Deployment, got %q", capturedParams.Get("kind"))
+	}
+	if capturedParams.Get("limit") != "10" {
+		t.Errorf("expected limit=10, got %q", capturedParams.Get("limit"))
+	}
+	if capturedParams.Get("offset") != "5" {
+		t.Errorf("expected offset=5, got %q", capturedParams.Get("offset"))
+	}
+}
+
+func TestGetWorkloads_NoFilters(t *testing.T) {
+	var capturedURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"workloads": []any{}, "total": 0})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetWorkloads(context.Background(), "", "", "", 0, 0)
+	if err != nil {
+		t.Fatalf("GetWorkloads() error: %v", err)
+	}
+	if strings.Contains(capturedURL, "?") {
+		t.Errorf("expected no query params, got URL: %s", capturedURL)
+	}
+}
+
+func TestGetNodes_WithFilters(t *testing.T) {
+	var capturedParams url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedParams = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"nodes": []any{}, "total": 0})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetNodes(context.Background(), "cls-001", "general-purpose", 20, 0)
+	if err != nil {
+		t.Fatalf("GetNodes() error: %v", err)
+	}
+	if capturedParams.Get("cluster_id") != "cls-001" {
+		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
+	}
+	if capturedParams.Get("node_group") != "general-purpose" {
+		t.Errorf("expected node_group=general-purpose, got %q", capturedParams.Get("node_group"))
+	}
+	if capturedParams.Get("limit") != "20" {
+		t.Errorf("expected limit=20, got %q", capturedParams.Get("limit"))
+	}
+	// offset=0 should NOT be in query params
+	if capturedParams.Has("offset") {
+		t.Errorf("expected offset to be absent (zero value), but got %q", capturedParams.Get("offset"))
+	}
+}
+
+func TestGetRecommendations_WithFilters(t *testing.T) {
+	var capturedParams url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth == "" || auth == "Bearer " {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		capturedParams = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"recommendations": []any{},
+			"total":           0,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetRecommendations(context.Background(), "cls-001", "rightsize", "open", 5, 10)
+	if err != nil {
+		t.Fatalf("GetRecommendations() error: %v", err)
+	}
+
+	if capturedParams.Get("cluster_id") != "cls-001" {
+		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
+	}
+	if capturedParams.Get("recommendation_type") != "rightsize" {
+		t.Errorf("expected recommendation_type=rightsize, got %q", capturedParams.Get("recommendation_type"))
+	}
+	if capturedParams.Get("status") != "open" {
+		t.Errorf("expected status=open, got %q", capturedParams.Get("status"))
+	}
+	if capturedParams.Get("limit") != "5" {
+		t.Errorf("expected limit=5, got %q", capturedParams.Get("limit"))
+	}
+	if capturedParams.Get("offset") != "10" {
+		t.Errorf("expected offset=10, got %q", capturedParams.Get("offset"))
+	}
+}
+
+func TestGetNamespaces_WithFilters(t *testing.T) {
+	var capturedParams url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth == "" || auth == "Bearer " {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		capturedParams = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"namespaces": []any{},
+			"total":      0,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	_, err := client.GetNamespaces(context.Background(), "cls-001", "platform", "engineering")
+	if err != nil {
+		t.Fatalf("GetNamespaces() error: %v", err)
+	}
+
+	if capturedParams.Get("cluster_id") != "cls-001" {
+		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
+	}
+	if capturedParams.Get("team") != "platform" {
+		t.Errorf("expected team=platform, got %q", capturedParams.Get("team"))
+	}
+	if capturedParams.Get("department") != "engineering" {
+		t.Errorf("expected department=engineering, got %q", capturedParams.Get("department"))
 	}
 }
