@@ -51,10 +51,14 @@ func TestGetClusters_JSONOutput(t *testing.T) {
 		noColor = false
 	})
 
-	// Capture stdout
+	// Capture stdout — restore in t.Cleanup so it runs even on panic
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
+	t.Cleanup(func() {
+		w.Close()
+		os.Stdout = oldStdout
+	})
 
 	ctx := context.Background()
 	getClustersCmd.SetContext(ctx)

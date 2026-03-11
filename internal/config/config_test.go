@@ -186,14 +186,9 @@ func TestSave_EmptyPath(t *testing.T) {
 	if defaultPath == "" {
 		t.Skip("home directory not available")
 	}
-	// Save to default path, then restore original content
+	// Read original content before any writes so we can restore it
 	origData, readErr := os.ReadFile(defaultPath)
-	cfg := &Config{APIURL: "http://test-empty-path.com", APIKey: "test-key"}
-	err := Save(cfg, "")
-	if err != nil {
-		t.Fatalf("Save(\"\") error: %v", err)
-	}
-	// Restore original content
+	// Register cleanup BEFORE calling Save so it runs even on panic
 	t.Cleanup(func() {
 		if readErr == nil {
 			_ = os.WriteFile(defaultPath, origData, 0600)
@@ -201,6 +196,11 @@ func TestSave_EmptyPath(t *testing.T) {
 			_ = os.Remove(defaultPath)
 		}
 	})
+	cfg := &Config{APIURL: "http://test-empty-path.com", APIKey: "test-key"}
+	err := Save(cfg, "")
+	if err != nil {
+		t.Fatalf("Save(\"\") error: %v", err)
+	}
 }
 
 func TestDefaultPath_ReturnsNonEmpty(t *testing.T) {
