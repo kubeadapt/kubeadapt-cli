@@ -417,6 +417,17 @@ func TestClient_WithLogger(t *testing.T) {
 	}
 }
 
+func TestClient_WithHTTPClient(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+	customHTTPClient := &http.Client{Timeout: 5 * time.Second}
+	client := NewClient(server.URL, "test-key", WithHTTPClient(customHTTPClient))
+	_, err := client.GetOverview(context.Background())
+	if err != nil {
+		t.Fatalf("WithHTTPClient client error: %v", err)
+	}
+}
+
 func TestClient_EmptyResponseBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -632,5 +643,131 @@ func TestGetNamespaces_WithFilters(t *testing.T) {
 	}
 	if capturedParams.Get("department") != "engineering" {
 		t.Errorf("expected department=engineering, got %q", capturedParams.Get("department"))
+	}
+}
+
+func TestGetCostsDepartments(t *testing.T) {
+	server := testutil.NewMockServer()
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetCostsDepartments(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetCostsDepartments() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetClusterCostDistribution(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data_points": []any{}, "cluster_id": "cls-001"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetClusterCostDistribution(context.Background(), "cls-001", "30d")
+	if err != nil {
+		t.Fatalf("GetClusterCostDistribution() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetNodeMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"metrics": []any{}})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetNodeMetrics(context.Background(), "node-001", "cls-001", "7d")
+	if err != nil {
+		t.Fatalf("GetNodeMetrics() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetWorkloadMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"metrics": []any{}})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetWorkloadMetrics(context.Background(), "wl-001", "cls-001", "7d")
+	if err != nil {
+		t.Fatalf("GetWorkloadMetrics() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetWorkloadNodes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"nodes": []any{}})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetWorkloadNodes(context.Background(), "wl-001", "cls-001")
+	if err != nil {
+		t.Fatalf("GetWorkloadNodes() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetNamespaceDetails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"name": "default"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetNamespaceDetails(context.Background(), "default", "cls-001")
+	if err != nil {
+		t.Fatalf("GetNamespaceDetails() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetNamespaceTrends(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"trends": []any{}})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetNamespaceTrends(context.Background(), "default", "cls-001", "30d")
+	if err != nil {
+		t.Fatalf("GetNamespaceTrends() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+}
+
+func TestGetNodeGroupDetails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"name": "general"})
+	}))
+	defer server.Close()
+	client := NewClient(server.URL, "test-key")
+	resp, err := client.GetNodeGroupDetails(context.Background(), "general", "cls-001")
+	if err != nil {
+		t.Fatalf("GetNodeGroupDetails() error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
 	}
 }

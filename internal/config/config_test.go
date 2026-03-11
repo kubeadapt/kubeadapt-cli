@@ -180,3 +180,56 @@ func TestLoadReadFileError(t *testing.T) {
 		t.Errorf("expected error to contain 'reading config', got: %v", err)
 	}
 }
+
+func TestSave_EmptyPath(t *testing.T) {
+	defaultPath := DefaultPath()
+	if defaultPath == "" {
+		t.Skip("home directory not available")
+	}
+	// Save to default path, then restore original content
+	origData, readErr := os.ReadFile(defaultPath)
+	cfg := &Config{APIURL: "http://test-empty-path.com", APIKey: "test-key"}
+	err := Save(cfg, "")
+	if err != nil {
+		t.Fatalf("Save(\"\") error: %v", err)
+	}
+	// Restore original content
+	t.Cleanup(func() {
+		if readErr == nil {
+			_ = os.WriteFile(defaultPath, origData, 0600)
+		} else {
+			_ = os.Remove(defaultPath)
+		}
+	})
+}
+
+func TestDefaultPath_ReturnsNonEmpty(t *testing.T) {
+	path := DefaultPath()
+	if path == "" {
+		t.Skip("os.UserHomeDir() unavailable in this environment")
+	}
+	if !strings.Contains(path, ".kubeadapt") {
+		t.Errorf("expected path to contain '.kubeadapt', got %q", path)
+	}
+	if !strings.Contains(path, "config.yaml") {
+		t.Errorf("expected path to contain 'config.yaml', got %q", path)
+	}
+}
+
+func TestSaveWriteError(t *testing.T) {
+	// Try to save to a read-only directory (simulate write error)
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0500); err != nil {
+		t.Fatalf("Mkdir() error: %v", err)
+	}
+	cfg := &Config{APIURL: "https://test.api.com", APIKey: "test-key"}
+	path := filepath.Join(readOnlyDir, "config.yaml")
+	err := Save(cfg, path)
+	if err == nil {
+		t.Fatal("expected error for write to read-only directory")
+	}
+	if !strings.Contains(err.Error(), "writing config") {
+		t.Errorf("expected error to contain 'writing config', got: %v", err)
+	}
+}
