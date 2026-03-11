@@ -1,0 +1,5 @@
+=== RUN   TestGetNodes_WithFilters
+--- PASS: TestGetNodes_WithFilters (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	(cached)
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]

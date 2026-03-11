@@ -1,0 +1,4 @@
+=== RUN   TestConfigMissing_UsesDefault
+--- PASS: TestConfigMissing_UsesDefault (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/cmd	1.019s

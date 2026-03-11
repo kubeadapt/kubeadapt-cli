@@ -1,0 +1,1 @@
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/config	0.008s	coverage: 78.6% of statements

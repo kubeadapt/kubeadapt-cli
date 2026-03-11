@@ -310,3 +310,121 @@ func SampleRecommendations() []types.RecommendationResponse {
 		},
 	}
 }
+
+// SampleTeamCosts returns sample team cost data.
+func SampleTeamCosts() []types.TeamCostResponse {
+	return []types.TeamCostResponse{
+		{
+			Team:           "platform",
+			NamespaceCount: 2,
+			WorkloadCount:  5,
+			PodCount:       12,
+			TotalCPUCores:  4.5,
+			TotalMemoryGB:  8.0,
+			HourlyCost:     0.22,
+			MonthlyCost:    160.60,
+		},
+		{
+			Team:           "sre",
+			NamespaceCount: 1,
+			WorkloadCount:  3,
+			PodCount:       6,
+			TotalCPUCores:  3.0,
+			TotalMemoryGB:  6.0,
+			HourlyCost:     0.16,
+			MonthlyCost:    116.80,
+		},
+	}
+}
+
+// SampleDepartmentCosts returns sample department cost data.
+func SampleDepartmentCosts() []types.DepartmentCostResponse {
+	return []types.DepartmentCostResponse{
+		{
+			Department:     "engineering",
+			TeamCount:      2,
+			NamespaceCount: 3,
+			WorkloadCount:  8,
+			PodCount:       18,
+			TotalCPUCores:  7.5,
+			TotalMemoryGB:  14.0,
+			HourlyCost:     0.77,
+			MonthlyCost:    562.10,
+		},
+		{
+			Department:     "data",
+			TeamCount:      1,
+			NamespaceCount: 1,
+			WorkloadCount:  2,
+			PodCount:       4,
+			TotalCPUCores:  2.0,
+			TotalMemoryGB:  4.0,
+			HourlyCost:     0.18,
+			MonthlyCost:    131.40,
+		},
+	}
+}
+
+// SampleNodeGroups returns sample node group data.
+func SampleNodeGroups() []types.NodeGroupResponse {
+	return []types.NodeGroupResponse{
+		{
+			ID:             "ng-001",
+			Name:           "general-purpose",
+			ClusterID:      "cls-001",
+			ClusterName:    StringPtr("production-us"),
+			NodeCount:      6,
+			InstanceType:   StringPtr("m5.xlarge"),
+			TotalCPUCores:  Float64Ptr(24.0),
+			TotalMemoryGB:  Float64Ptr(96.0),
+			SpotPercentage: Float64Ptr(0.0),
+			HourlyCost:     Float64Ptr(1.152),
+		},
+		{
+			ID:             "ng-002",
+			Name:           "compute-optimized",
+			ClusterID:      "cls-001",
+			ClusterName:    StringPtr("production-us"),
+			NodeCount:      4,
+			InstanceType:   StringPtr("c5.2xlarge"),
+			TotalCPUCores:  Float64Ptr(32.0),
+			TotalMemoryGB:  Float64Ptr(64.0),
+			SpotPercentage: Float64Ptr(50.0),
+			HourlyCost:     Float64Ptr(0.68),
+		},
+	}
+}
+
+// SamplePersistentVolumes returns sample persistent volume data.
+func SamplePersistentVolumes() []types.PersistentVolumeResponse {
+	return []types.PersistentVolumeResponse{
+		{
+			ID:           "pv-001",
+			Name:         "pvc-prometheus-data",
+			ClusterID:    "cls-001",
+			ClusterName:  StringPtr("production-us"),
+			Namespace:    StringPtr("monitoring"),
+			PVCName:      StringPtr("prometheus-data"),
+			StorageClass: StringPtr("gp3"),
+			CapacityGB:   100.0,
+			AccessModes:  []string{"ReadWriteOnce"},
+			VolumeType:   StringPtr("gp3"),
+			Zone:         StringPtr("us-east-1a"),
+			HourlyCost:   Float64Ptr(0.011),
+		},
+		{
+			ID:           "pv-002",
+			Name:         "pvc-postgres-data",
+			ClusterID:    "cls-001",
+			ClusterName:  StringPtr("production-us"),
+			Namespace:    StringPtr("default"),
+			PVCName:      StringPtr("postgres-data"),
+			StorageClass: StringPtr("gp3"),
+			CapacityGB:   20.0,
+			AccessModes:  []string{"ReadWriteOnce"},
+			VolumeType:   StringPtr("gp3"),
+			Zone:         StringPtr("us-east-1b"),
+			HourlyCost:   Float64Ptr(0.005),
+		},
+	}
+}

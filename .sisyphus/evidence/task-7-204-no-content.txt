@@ -1,0 +1,5 @@
+=== RUN   TestClient_204NoContent
+--- PASS: TestClient_204NoContent (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	(cached)
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]

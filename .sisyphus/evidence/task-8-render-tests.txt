@@ -1,0 +1,148 @@
+=== RUN   TestRenderOverview
+╭───────────────────────────┬──────────╮
+│ Metric                    │ Value    │
+├───────────────────────────┼──────────┤
+│ Clusters                  │ 3        │
+│ Connected Clusters        │ 2        │
+│ Total Nodes               │ 15       │
+│ Total Pods                │ 120      │
+│ Total Workloads           │ 45       │
+│ Hourly Cost               │ $12.50   │
+│ Monthly Cost              │ $9000.00 │
+│ Potential Monthly Savings │ $1500.00 │
+│ Avg CPU Utilization       │ 42.5%    │
+│ Avg Memory Utilization    │ 65.3%    │
+│ MTD Actual Cost           │ $4250.00 │
+│ Run Rate (monthly)        │ $9125.00 │
+│ Efficiency Score          │ 62.8%    │
+│ Recommendations           │ 8        │
+╰───────────────────────────┴──────────╯
+╭───────────────────────────┬──────────╮
+│ Metric                    │ Value    │
+├───────────────────────────┼──────────┤
+│ Clusters                  │ 3        │
+│ Connected Clusters        │ 2        │
+│ Total Nodes               │ 15       │
+│ Total Pods                │ 120      │
+│ Total Workloads           │ 45       │
+│ Hourly Cost               │ $12.50   │
+│ Monthly Cost              │ $9000.00 │
+│ Potential Monthly Savings │ $1500.00 │
+│ Avg CPU Utilization       │ 42.5%    │
+│ Avg Memory Utilization    │ 65.3%    │
+│ MTD Actual Cost           │ $4250.00 │
+│ Run Rate (monthly)        │ $9125.00 │
+│ Efficiency Score          │ 62.8%    │
+│ Recommendations           │ 8        │
+╰───────────────────────────┴──────────╯
+--- PASS: TestRenderOverview (0.01s)
+=== RUN   TestRenderClusters
+╭─────────┬───────────────┬──────────┬───────────┬───────────┬───────┬────────────┬───────────┬───────────────────┬───────╮
+│ ID      │ Name          │ Provider │ Region    │ Status    │ Nodes │ Efficiency │ Monthly $ │ Potential Savings │ $/hr  │
+├─────────┼───────────────┼──────────┼───────────┼───────────┼───────┼────────────┼───────────┼───────────────────┼───────┤
+│ cls-001 │ production-us │ aws      │ us-east-1 │ connected │ 10    │ 72.5%      │ $6205.00  │ $450.00           │ $8.50 │
+│ cls-002 │ staging-eu    │ aws      │ eu-west-1 │ connected │ 5     │ 45.8%      │ $2920.00  │ $180.00           │ $4.00 │
+╰─────────┴───────────────┴──────────┴───────────┴───────────┴───────┴────────────┴───────────┴───────────────────┴───────╯
+Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io
+╭────┬──────┬──────────┬────────┬────────┬───────┬────────────┬───────────┬───────────────────┬──────╮
+│ ID │ Name │ Provider │ Region │ Status │ Nodes │ Efficiency │ Monthly $ │ Potential Savings │ $/hr │
+├────┼──────┼──────────┼────────┼────────┼───────┼────────────┼───────────┼───────────────────┼──────┤
+╰────┴──────┴──────────┴────────┴────────┴───────┴────────────┴───────────┴───────────────────┴──────╯
+Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io
+--- PASS: TestRenderClusters (0.00s)
+=== RUN   TestRenderNodes
+╭───────────────────────────┬───────────────┬────────────┬───────┬─────┬─────────┬──────┬──────┬───────╮
+│ Name                      │ Cluster       │ Instance   │ Ready │ CPU │ Memory  │ Pods │ Spot │ $/hr  │
+├───────────────────────────┼───────────────┼────────────┼───────┼─────┼─────────┼──────┼──────┼───────┤
+│ ip-10-0-1-42.ec2.internal │ production-us │ m5.xlarge  │ Yes   │ 3.9 │ 15.2 GB │ 12   │ No   │ $0.19 │
+│ ip-10-0-2-87.ec2.internal │ production-us │ c5.2xlarge │ Yes   │ 7.9 │ 15.0 GB │ 8    │ Yes  │ $0.34 │
+╰───────────────────────────┴───────────────┴────────────┴───────┴─────┴─────────┴──────┴──────┴───────╯
+╭───────────────────────────┬───────────────┬────────────┬───────┬─────┬─────────┬──────┬──────┬───────╮
+│ Name                      │ Cluster       │ Instance   │ Ready │ CPU │ Memory  │ Pods │ Spot │ $/hr  │
+├───────────────────────────┼───────────────┼────────────┼───────┼─────┼─────────┼──────┼──────┼───────┤
+│ ip-10-0-1-42.ec2.internal │ production-us │ m5.xlarge  │ Yes   │ 3.9 │ 15.2 GB │ 12   │ No   │ $0.19 │
+│ ip-10-0-2-87.ec2.internal │ production-us │ c5.2xlarge │ Yes   │ 7.9 │ 15.0 GB │ 8    │ Yes  │ $0.34 │
+╰───────────────────────────┴───────────────┴────────────┴───────┴─────┴─────────┴──────┴──────┴───────╯
+--- PASS: TestRenderNodes (0.01s)
+=== RUN   TestRenderWorkloads
+╭───────────────────┬─────────────┬────────────┬───────────────┬──────────┬────────────┬───────────┬───────╮
+│ Name              │ Kind        │ Namespace  │ Cluster       │ Replicas │ Efficiency │ Monthly $ │ $/hr  │
+├───────────────────┼─────────────┼────────────┼───────────────┼──────────┼────────────┼───────────┼───────┤
+│ api-gateway       │ Deployment  │ default    │ production-us │ 3/3      │ 68.5%      │ $62.05    │ $0.09 │
+│ prometheus-server │ StatefulSet │ monitoring │ production-us │ 1/1      │ 42.3%      │ $103.66   │ $0.14 │
+╰───────────────────┴─────────────┴────────────┴───────────────┴──────────┴────────────┴───────────┴───────╯
+--- PASS: TestRenderWorkloads (0.00s)
+=== RUN   TestRenderRecommendations
+╭─────────┬────────────┬───────────────┬──────────────────────────────┬──────────┬────────┬─────────────────╮
+│ ID      │ Type       │ Cluster       │ Resource                     │ Priority │ Status │ Monthly Savings │
+├─────────┼────────────┼───────────────┼──────────────────────────────┼──────────┼────────┼─────────────────┤
+│ rec-001 │ rightsize  │ production-us │ default/api-gateway          │ low      │ open   │ $8.64           │
+│ rec-002 │ scale_down │ production-us │ monitoring/prometheus-server │ medium   │ open   │ $18.00          │
+╰─────────┴────────────┴───────────────┴──────────────────────────────┴──────────┴────────┴─────────────────╯
+--- PASS: TestRenderRecommendations (0.00s)
+=== RUN   TestRenderNamespaces
+╭────────────┬───────────────┬──────┬───────────┬────────────┬────────────┬───────────┬──────────┬───────╮
+│ Name       │ Cluster       │ Pods │ Workloads │ Containers │ Efficiency │ Monthly $ │ Team     │ $/hr  │
+├────────────┼───────────────┼──────┼───────────┼────────────┼────────────┼───────────┼──────────┼───────┤
+│ default    │ production-us │ 12   │ 5         │ 24         │ 65.2%      │ $328.50   │ platform │ $0.45 │
+│ monitoring │ production-us │ 6    │ 3         │ 12         │ 52.8%      │ $233.60   │ sre      │ $0.32 │
+╰────────────┴───────────────┴──────┴───────────┴────────────┴────────────┴───────────┴──────────┴───────╯
+--- PASS: TestRenderNamespaces (0.00s)
+=== RUN   TestRenderDashboard
+╭───────────────────┬──────────╮
+│ Metric            │ Value    │
+├───────────────────┼──────────┤
+│ Clusters          │ 3        │
+│ Nodes             │ 15       │
+│ Pods              │ 120      │
+│ Monthly Cost      │ $9125.00 │
+│ Hourly Cost       │ $12.50   │
+│ Potential Savings │ $1500.00 │
+│ Efficiency        │ 62.8%    │
+│ MTD Actual Cost   │ $4250.00 │
+│ Run Rate          │ $9125.00 │
+│ Recommendations   │ 8        │
+╰───────────────────┴──────────╯
+--- PASS: TestRenderDashboard (0.00s)
+=== RUN   TestRender_EmptyData
+╭────┬──────┬──────────┬────────┬────────┬───────┬────────────┬───────────┬───────────────────┬──────╮
+│ ID │ Name │ Provider │ Region │ Status │ Nodes │ Efficiency │ Monthly $ │ Potential Savings │ $/hr │
+├────┼──────┼──────────┼────────┼────────┼───────┼────────────┼───────────┼───────────────────┼──────┤
+╰────┴──────┴──────────┴────────┴────────┴───────┴────────────┴───────────┴───────────────────┴──────╯
+Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io
+╭──────┬─────────┬──────────┬───────┬─────┬────────┬──────┬──────┬──────╮
+│ Name │ Cluster │ Instance │ Ready │ CPU │ Memory │ Pods │ Spot │ $/hr │
+├──────┼─────────┼──────────┼───────┼─────┼────────┼──────┼──────┼──────┤
+╰──────┴─────────┴──────────┴───────┴─────┴────────┴──────┴──────┴──────╯
+╭──────┬──────┬───────────┬─────────┬──────────┬────────────┬───────────┬──────╮
+│ Name │ Kind │ Namespace │ Cluster │ Replicas │ Efficiency │ Monthly $ │ $/hr │
+├──────┼──────┼───────────┼─────────┼──────────┼────────────┼───────────┼──────┤
+╰──────┴──────┴───────────┴─────────┴──────────┴────────────┴───────────┴──────╯
+╭────┬──────┬─────────┬──────────┬──────────┬────────┬─────────────────╮
+│ ID │ Type │ Cluster │ Resource │ Priority │ Status │ Monthly Savings │
+├────┼──────┼─────────┼──────────┼──────────┼────────┼─────────────────┤
+╰────┴──────┴─────────┴──────────┴──────────┴────────┴─────────────────╯
+╭──────┬─────────┬──────┬───────────┬────────────┬────────────┬───────────┬──────┬──────╮
+│ Name │ Cluster │ Pods │ Workloads │ Containers │ Efficiency │ Monthly $ │ Team │ $/hr │
+├──────┼─────────┼──────┼───────────┼────────────┼────────────┼───────────┼──────┼──────┤
+╰──────┴─────────┴──────┴───────────┴────────────┴────────────┴───────────┴──────┴──────╯
+╭──────┬────────────┬───────────┬──────┬─────┬────────┬──────┬──────╮
+│ Team │ Namespaces │ Workloads │ Pods │ CPU │ Memory │ $/hr │ $/mo │
+├──────┼────────────┼───────────┼──────┼─────┼────────┼──────┼──────┤
+╰──────┴────────────┴───────────┴──────┴─────┴────────┴──────┴──────╯
+╭────────────┬────────────┬───────────┬──────┬─────┬────────┬──────┬──────╮
+│ Department │ Namespaces │ Workloads │ Pods │ CPU │ Memory │ $/hr │ $/mo │
+├────────────┼────────────┼───────────┼──────┼─────┼────────┼──────┼──────┤
+╰────────────┴────────────┴───────────┴──────┴─────┴────────┴──────┴──────╯
+╭──────┬─────────┬──────────┬───────┬─────┬────────┬────────┬──────╮
+│ Name │ Cluster │ Instance │ Nodes │ CPU │ Memory │ Spot % │ $/hr │
+├──────┼─────────┼──────────┼───────┼─────┼────────┼────────┼──────┤
+╰──────┴─────────┴──────────┴───────┴─────┴────────┴────────┴──────╯
+╭──────┬─────────┬───────────┬─────┬───────────────┬──────────┬──────┬──────╮
+│ Name │ Cluster │ Namespace │ PVC │ Storage Class │ Capacity │ Type │ $/hr │
+├──────┼─────────┼───────────┼─────┼───────────────┼──────────┼──────┼──────┤
+╰──────┴─────────┴───────────┴─────┴───────────────┴──────────┴──────┴──────╯
+--- PASS: TestRender_EmptyData (0.01s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	(cached)
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/output	(cached)	coverage: 90.6% of statements

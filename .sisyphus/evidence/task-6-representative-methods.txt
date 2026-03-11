@@ -1,0 +1,9 @@
+=== RUN   TestGetCostsTeams
+--- PASS: TestGetCostsTeams (0.00s)
+=== RUN   TestGetPersistentVolumes
+--- PASS: TestGetPersistentVolumes (0.00s)
+=== RUN   TestGetNodeGroups
+--- PASS: TestGetNodeGroups (0.00s)
+PASS
+ok  	github.com/kubeadapt/kubeadapt-cli/internal/api	(cached)
+?   	github.com/kubeadapt/kubeadapt-cli/internal/api/types	[no test files]
