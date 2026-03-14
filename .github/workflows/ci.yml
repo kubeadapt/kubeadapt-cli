@@ -11,6 +11,6 @@ permissions:
 
 jobs:
   test-suite:
-    uses: kubeadapt/actions/.github/workflows/golang-cli-test-suite.yml@main
+    uses: kubeadapt/public-actions/.github/workflows/golang-cli-test-suite.yml@main
     with:
       go_version: '1.26.x'

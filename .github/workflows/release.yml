@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release:
-    uses: kubeadapt/actions/.github/workflows/golang-cli-release.yml@main
+    uses: kubeadapt/public-actions/.github/workflows/golang-cli-release.yml@main
     with:
       go_version: '1.26.x'
     secrets:
