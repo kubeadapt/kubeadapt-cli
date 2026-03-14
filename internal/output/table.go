@@ -71,6 +71,7 @@ func RenderOverview(o *types.OverviewResponse, noColor bool) {
 		{"Recommendations", FormatInt(o.RecommendationCount)},
 	}
 	renderTable(headers, rows, noColor)
+	fmt.Fprintln(os.Stdout, StyleMuted.Render("Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io"))
 }
 
 // RenderClusters renders a list of clusters as a styled table.
@@ -294,4 +295,5 @@ func RenderDashboard(d *types.DashboardResponse, noColor bool) {
 		{"Recommendations", FormatInt(d.TotalRecommendations)},
 	}
 	renderTable(headers, rows, noColor)
+	fmt.Fprintln(os.Stdout, StyleMuted.Render("Potential Savings reflects workload rightsizing only. For all recommendations visit https://app.kubeadapt.io"))
 }
