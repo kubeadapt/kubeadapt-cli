@@ -65,7 +65,7 @@ func RenderOverview(o *types.OverviewResponse, noColor bool) {
 		{"Potential Monthly Savings", FormatCostPtr(o.PotentialMonthlySavings)},
 		{"Avg CPU Utilization", FormatPercentPtr(o.AvgCPUUtilization)},
 		{"Avg Memory Utilization", FormatPercentPtr(o.AvgMemoryUtilization)},
-		{"MTD Actual Cost", FormatCostPtr(o.MTDActualCost)},
+		{"Month-to-Date Spend", FormatCostPtr(o.MTDActualCost)},
 		{"Run Rate (monthly)", FormatCostPtr(o.RunRate)},
 		{"Efficiency Score", FormatPercentPtr(o.EfficiencyScore)},
 		{"Recommendations", FormatInt(o.RecommendationCount)},
@@ -287,10 +287,10 @@ func RenderDashboard(d *types.DashboardResponse, noColor bool) {
 		{"Pods", FormatInt(d.PodCount)},
 		{"Monthly Cost", FormatCost(d.TotalMonthlyCost)},
 		{"Hourly Cost", FormatCost(d.TotalHourlyCost)},
-		{"Potential Savings", FormatCost(d.PotentialMonthlySavings)},
+		{"Potential Savings (monthly)", FormatCost(d.PotentialMonthlySavings)},
 		{"Efficiency", FormatPercentPtr(d.EfficiencyScore)},
-		{"MTD Actual Cost", FormatCost(d.MTDActualCost)},
-		{"Run Rate", FormatCost(d.RunRate)},
+		{"Month-to-Date Spend", FormatCost(d.MTDActualCost)},
+		{"Run Rate (monthly)", FormatCost(d.RunRate)},
 		{"Recommendations", FormatInt(d.TotalRecommendations)},
 	}
 	renderTable(headers, rows, noColor)
