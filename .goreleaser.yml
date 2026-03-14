@@ -1,6 +1,6 @@
 version: 2
 
-project_name: kubeadapt-cli
+project_name: kubeadapt
 
 before:
   hooks:
@@ -9,7 +9,7 @@ before:
 builds:
   - id: default
     main: ./main.go
-    binary: kubeadapt-cli
+    binary: kubeadapt
     env:
       - CGO_ENABLED=0
     goos:
@@ -54,13 +54,13 @@ release:
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HOMEBREW DISTRIBUTION
-# Enables: brew install kubeadapt/tap/kubeadapt-cli
+# Enables: brew install kubeadapt/tap/kubeadapt
 #
 # Prerequisite: create github.com/kubeadapt/homebrew-tap (public repo)
 # If you don't need Homebrew distribution, delete this entire section.
 # ──────────────────────────────────────────────────────────────────────────────
 brews:
-  - name: kubeadapt-cli
+  - name: kubeadapt
     repository:
       owner: kubeadapt
       name: homebrew-tap
@@ -72,25 +72,25 @@ brews:
     description: "KubeAdapt CLI for Kubernetes cost optimization"
     license: "Apache-2.0"
     install: |
-      bin.install "kubeadapt-cli"
+      bin.install "kubeadapt"
     test: |
-      system "#{bin}/kubeadapt-cli", "version"
+      system "#{bin}/kubeadapt", "version"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # KREW DISTRIBUTION (kubectl plugin manager)
-# Enables: kubectl krew install kubeadapt-cli  →  kubectl kubeadapt-cli
+# Enables: kubectl krew install kubeadapt  →  kubectl kubeadapt
 #
 # Prerequisites:
 #   1. Create github.com/kubeadapt/krew-index (public repo)
 #   2. For official distribution: open PR to kubernetes-sigs/krew-index
 #
-# Binary naming: GoReleaser will also produce a kubectl-kubeadapt-cli binary
+# Binary naming: GoReleaser will also produce a kubectl-kubeadapt binary
 # that kubectl plugin discovery picks up automatically from PATH.
 #
 # If this CLI is NOT a kubectl plugin, delete this entire section.
 # ──────────────────────────────────────────────────────────────────────────────
 # krews:
-#   - name: kubeadapt-cli
+#   - name: kubeadapt
 #     repository:
 #       owner: kubeadapt
 #       name: krew-index
