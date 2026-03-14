@@ -13,14 +13,14 @@ import (
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authenticate with KubeAdapt API",
-	Long:  `Authenticate with the KubeAdapt API by providing your API key. The key is stored securely in ~/.kubeadapt/config.yaml.`,
+	Short: "Authenticate with Kubeadapt API",
+	Long:  `Authenticate with the Kubeadapt API by providing your API key. The key is stored securely in ~/.kubeadapt/config.yaml.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, _ := cmd.Flags().GetString("api-key")
 
 		if key == "" {
 			// Prompt for API key
-			fmt.Print("Enter your KubeAdapt API key: ")
+			fmt.Print("Enter your Kubeadapt API key: ")
 			if term.IsTerminal(int(os.Stdin.Fd())) {
 				keyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 				if err != nil {

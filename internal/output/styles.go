@@ -2,7 +2,7 @@ package output
 
 import "github.com/charmbracelet/lipgloss"
 
-// KubeAdapt brand colors.
+// Kubeadapt brand colors.
 var (
 	ColorPrimary = lipgloss.Color("#3B82F6") // Blue
 	ColorGreen   = lipgloss.Color("#22C55E") // Green - savings

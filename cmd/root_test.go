@@ -86,7 +86,7 @@ func TestConfigOverrideChain_EnvOverridesConfig(t *testing.T) {
 	t.Setenv("KUBEADAPT_API_URL", "http://from-env.com")
 	t.Setenv("KUBEADAPT_API_KEY", "env-key")
 
-	// No flag set — apiURL and apiKey remain "".
+	// No flag set, so apiURL and apiKey remain "".
 	cfgFile = cfgPath
 
 	if err := rootCmd.PersistentPreRunE(dummyCmd(), nil); err != nil {
@@ -137,7 +137,7 @@ func TestConfigOverrideChain_ConfigFallback(t *testing.T) {
 func TestConfigMissing_UsesDefault(t *testing.T) {
 	resetGlobals(t)
 
-	// Point cfgFile at a path that does not exist — Load() will error and
+	// Point cfgFile at a path that does not exist. Load() will error and
 	// PersistentPreRunE will fall back to config.Default().
 	cfgFile = filepath.Join(t.TempDir(), "nonexistent.yaml")
 

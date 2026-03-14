@@ -32,7 +32,7 @@ func MockHandler(statusCode int, response interface{}) http.HandlerFunc {
 	}
 }
 
-// NewMockServer creates a test server with routes matching the KubeAdapt API.
+// NewMockServer creates a test server with routes matching the Kubeadapt API.
 func NewMockServer() *httptest.Server {
 	mux := http.NewServeMux()
 

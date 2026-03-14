@@ -19,7 +19,7 @@ import (
 
 const defaultTimeout = 30 * time.Second
 
-// Client is the KubeAdapt API client.
+// Client is the Kubeadapt API client.
 type Client struct {
 	baseURL    string
 	apiKey     string

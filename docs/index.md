@@ -1,6 +1,6 @@
 # kubeadapt-cli
 
-Command-line interface for the [KubeAdapt](https://kubeadapt.com) Kubernetes cost optimization platform.
+Command-line interface for the [Kubeadapt](https://kubeadapt.com) Kubernetes cost optimization platform.
 
 ## Installation
 

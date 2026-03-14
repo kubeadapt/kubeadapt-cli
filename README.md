@@ -1,131 +1,89 @@
-# KubeAdapt CLI
+# Kubeadapt CLI
 
-Command-line interface for the [KubeAdapt](https://kubeadapt.com) Kubernetes cost optimization platform.
+CLI for the [Kubeadapt](https://kubeadapt.io) Kubernetes cost optimization platform.
 
 ## Installation
 
-### Homebrew
-
 ```bash
-brew install kubeadapt/tap/kubeadapt-cli
+# Homebrew
+brew install kubeadapt/tap/kubeadapt
 
-# Upgrade to latest version
-brew upgrade kubeadapt/tap/kubeadapt-cli
-```
-
-### Install Script
-
-```bash
-curl -sSL https://raw.githubusercontent.com/kubeadapt/kubeadapt-cli/main/scripts/install.sh | bash
-```
-
-### From Source
-
-```bash
+# From source
 go install github.com/kubeadapt/kubeadapt-cli@latest
-```
-
-### Build from Source
-
-```bash
-git clone https://github.com/kubeadapt/kubeadapt-cli.git
-cd kubeadapt-cli
-task build
 ```
 
 ## Quick Start
 
 ```bash
-# Authenticate
 kubeadapt auth login
-
-# View organization overview
 kubeadapt get overview
-
-# List clusters
 kubeadapt get clusters
-
-# View cost optimization recommendations
 kubeadapt get recommendations
 ```
 
 ## Commands
 
-### Authentication
-
 ```bash
-kubeadapt auth login          # Store API key
-kubeadapt auth status         # Show current auth status
-kubeadapt auth logout         # Remove stored credentials
+# Auth
+kubeadapt auth login / status / logout
+
+# Resources
+kubeadapt get overview
+kubeadapt get dashboard
+kubeadapt get clusters
+kubeadapt get cluster <id>
+kubeadapt get workloads
+kubeadapt get nodes
+kubeadapt get recommendations
+kubeadapt get costs teams
+kubeadapt get costs departments
+kubeadapt get node-groups
+kubeadapt get namespaces
+kubeadapt get persistent-volumes
 ```
 
-### Resources
-
-```bash
-kubeadapt get overview             # Organization dashboard
-kubeadapt get dashboard            # Organization dashboard with cost trends
-kubeadapt get clusters             # List all clusters
-kubeadapt get cluster <id>         # Single cluster details
-kubeadapt get workloads            # List workloads
-kubeadapt get nodes                # List nodes
-kubeadapt get recommendations      # Cost optimization suggestions
-kubeadapt get costs teams          # Cost breakdown by team
-kubeadapt get costs departments    # Cost breakdown by department
-kubeadapt get node-groups          # List node groups
-kubeadapt get namespaces           # List namespaces
-kubeadapt get persistent-volumes   # List persistent volumes
-```
-
-Most `get` commands support optional filters:
+Most commands support filters:
 
 ```bash
 kubeadapt get workloads --cluster-id cls-001 --namespace default --kind Deployment
-kubeadapt get nodes --cluster-id cls-001 --limit 10
 kubeadapt get recommendations --type rightsizing --status active
 kubeadapt get dashboard --days 7
 ```
 
 ## Output Formats
 
-All `get` commands support the `--output` flag:
-
 ```bash
-kubeadapt get clusters -o table   # Default styled table
-kubeadapt get clusters -o json    # JSON
-kubeadapt get clusters -o yaml    # YAML
+kubeadapt get clusters -o table   # default
+kubeadapt get clusters -o json
+kubeadapt get clusters -o yaml
 ```
+
+## Configuration
+
+Config at `~/.kubeadapt/config.yaml`:
+
+```yaml
+api_url: https://public-api.kubeadapt.io
+api_key: ka_your_api_key_here
+```
+
+`KUBEADAPT_API_KEY` env var overrides the stored config.
 
 ## Global Flags
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--api-key` | | API key (overrides stored config) |
+| `--api-key` | | API key (overrides config) |
 | `--output` | `-o` | Output format: table, json, yaml |
 | `--no-color` | | Disable colored output |
-| `--verbose` | `-v` | Enable debug logging |
+| `--verbose` | `-v` | Debug logging |
 | `--config` | | Config file path |
-
-## Configuration
-
-Config is stored at `~/.kubeadapt/config.yaml`:
-
-```yaml
-api_url: https://api.kubeadapt.com
-api_key: ka_your_api_key_here
-```
-
-Environment variable `KUBEADAPT_API_KEY` overrides the stored config.
 
 ## Shell Completions
 
 ```bash
-# Bash
 source <(kubeadapt completion bash)
-
-# Zsh
 source <(kubeadapt completion zsh)
-
-# Fish
 kubeadapt completion fish | source
 ```
 
@@ -133,12 +91,12 @@ kubeadapt completion fish | source
 
 ```bash
 task build    # Build binary
-task test     # Run tests with race detector
-task lint     # Run linter
-task fmt      # Format code
-task vuln     # Run vulnerability check
+task test     # Tests with race detector
+task lint     # Linter
+task fmt      # Format
+task vuln     # Vulnerability check
 ```
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+Apache License 2.0

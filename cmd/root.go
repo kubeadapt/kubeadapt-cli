@@ -24,8 +24,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "kubeadapt",
-	Short: "KubeAdapt CLI - Kubernetes cost optimization",
-	Long:  `KubeAdapt CLI provides command-line access to the KubeAdapt platform for Kubernetes cost optimization, resource management, and recommendations.`,
+	Short: "Kubeadapt CLI - Kubernetes cost optimization",
+	Long:  `Kubeadapt CLI provides command-line access to the Kubeadapt platform for Kubernetes cost optimization, resource management, and recommendations.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip config loading for auth login and version commands
 		if cmd.Name() == "login" || cmd.Name() == "version" || cmd.Name() == "completion" {
@@ -77,8 +77,8 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.kubeadapt/config.yaml)")
-	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "KubeAdapt API URL")
-	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "KubeAdapt API key")
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "Kubeadapt API URL")
+	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "Kubeadapt API key")
 	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (table|json|yaml)")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
