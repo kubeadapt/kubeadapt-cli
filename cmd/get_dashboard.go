@@ -14,9 +14,7 @@ var getDashboardCmd = &cobra.Command{
 			return err
 		}
 
-		days, _ := cmd.Flags().GetInt("days")
-
-		resp, err := client.GetDashboard(cmd.Context(), days)
+		resp, err := client.GetDashboard(cmd.Context())
 		if err != nil {
 			return err
 		}
@@ -28,6 +26,5 @@ var getDashboardCmd = &cobra.Command{
 }
 
 func init() {
-	getDashboardCmd.Flags().Int("days", 30, "Number of days for cost trends")
 	getCmd.AddCommand(getDashboardCmd)
 }

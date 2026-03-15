@@ -220,10 +220,6 @@ func SampleDashboard() *types.DashboardResponse {
 		RunRate:                 9125.00,
 		DaysElapsed:             15,
 		DaysInMonth:             31,
-		CostTrends: []types.CostTrendPoint{
-			{Date: "2025-01-01", TotalCost: 280.50},
-			{Date: "2025-01-02", TotalCost: 295.20},
-		},
 		TopClusters: []types.TopCluster{
 			{ClusterID: "cls-001", ClusterName: "production-us", HourlyCost: 8.50, Efficiency: Float64Ptr(72.5)},
 			{ClusterID: "cls-002", ClusterName: "staging-eu", HourlyCost: 4.00, Efficiency: Float64Ptr(45.8)},

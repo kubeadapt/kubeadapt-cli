@@ -147,13 +147,9 @@ func (c *Client) GetOverview(ctx context.Context) (*types.OverviewResponse, erro
 }
 
 // GetDashboard fetches the organization dashboard.
-func (c *Client) GetDashboard(ctx context.Context, days int) (*types.DashboardResponse, error) {
-	params := url.Values{}
-	if days > 0 {
-		params.Set("days", strconv.Itoa(days))
-	}
+func (c *Client) GetDashboard(ctx context.Context) (*types.DashboardResponse, error) {
 	var resp types.DashboardResponse
-	err := c.get(ctx, "/v1/dashboard", params, &resp)
+	err := c.get(ctx, "/v1/dashboard", nil, &resp)
 	return &resp, err
 }
 

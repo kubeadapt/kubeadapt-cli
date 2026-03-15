@@ -192,7 +192,7 @@ func TestGetDashboard(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetDashboard(context.Background(), 30)
+	resp, err := client.GetDashboard(context.Background())
 	if err != nil {
 		t.Fatalf("GetDashboard() error: %v", err)
 	}
