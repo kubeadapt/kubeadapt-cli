@@ -47,7 +47,6 @@ Most commands support filters:
 ```bash
 kubeadapt get workloads --cluster-id cls-001 --namespace default --kind Deployment
 kubeadapt get recommendations --type rightsizing --status active
-kubeadapt get dashboard --days 7
 ```
 
 ## Output Formats
