@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultAPIURL = "http://localhost:8002"
+	defaultAPIURL = "https://public-api.kubeadapt.io"
 	configDir     = ".kubeadapt"
 	configFile    = "config.yaml"
 )
