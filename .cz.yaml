@@ -1,7 +1,7 @@
 # Commitizen configuration
 commitizen:
   name: cz_conventional_commits
-  version: 0.1.3
+  version: 0.1.4
   tag_format: $version
   version_type: semver
   version_provider: commitizen

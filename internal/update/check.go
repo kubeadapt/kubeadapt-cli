@@ -68,7 +68,7 @@ func CheckForUpdate() string {
 	latest := strings.TrimPrefix(release.TagName, "v")
 	current := strings.TrimPrefix(version.Version, "v")
 	_ = os.MkdirAll(cacheDir(), 0700)
-	cacheData, _ := json.Marshal(cachedCheck{CheckedAt: time.Now(), LatestVersion: release.TagName})
+	cacheData, _ := json.Marshal(cachedCheck{CheckedAt: time.Now(), LatestVersion: latest})
 	_ = os.WriteFile(cachePath, cacheData, 0600)
 
 	if latest != current && release.TagName != "" {
