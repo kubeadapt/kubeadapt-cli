@@ -8,19 +8,19 @@ import (
 var getOverviewCmd = &cobra.Command{
 	Use:   "overview",
 	Short: "Show organization dashboard overview",
+	Example: `  kubeadapt get overview
+  kubeadapt get overview -o json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClient()
+		client, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-
-		resp, err := client.GetOverview(cmd.Context())
+		resp, err := fetchWithSpinner(cmd.Context(), "Fetching overview...", client.GetOverview)
 		if err != nil {
 			return err
 		}
-
-		return renderOutput(outputFmt, resp, func() {
-			output.RenderOverview(resp, noColor)
+		return renderOutputFromCmd(cmd, resp, func() {
+			output.RenderOverview(resp, isNoColor(cmd))
 		})
 	},
 }

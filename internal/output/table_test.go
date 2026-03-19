@@ -18,9 +18,9 @@ func TestRenderOverview(t *testing.T) {
 func TestRenderClusters(t *testing.T) {
 	clusters := testutil.SampleClusters()
 	// Should not panic with normal data
-	RenderClusters(clusters, true)
+	RenderClusters(clusters, len(clusters), true)
 	// Should not panic with empty slice
-	RenderClusters([]types.ClusterResponse{}, true)
+	RenderClusters([]types.ClusterResponse{}, 0, true)
 }
 
 func TestFormatCost(t *testing.T) {
@@ -242,24 +242,24 @@ func TestShortID(t *testing.T) {
 func TestRenderNodes(t *testing.T) {
 	nodes := testutil.SampleNodes()
 	// Should not panic with normal data
-	RenderNodes(nodes, true)
+	RenderNodes(nodes, len(nodes), true)
 	// Should not panic with noColor=false
-	RenderNodes(nodes, false)
+	RenderNodes(nodes, len(nodes), false)
 }
 
 func TestRenderWorkloads(t *testing.T) {
 	workloads := testutil.SampleWorkloads()
-	RenderWorkloads(workloads, true)
+	RenderWorkloads(workloads, len(workloads), true)
 }
 
 func TestRenderRecommendations(t *testing.T) {
 	recs := testutil.SampleRecommendations()
-	RenderRecommendations(recs, true)
+	RenderRecommendations(recs, len(recs), true)
 }
 
 func TestRenderNamespaces(t *testing.T) {
 	namespaces := testutil.SampleNamespaces()
-	RenderNamespaces(namespaces, true)
+	RenderNamespaces(namespaces, len(namespaces), true)
 }
 
 func TestRenderDashboard(t *testing.T) {
@@ -269,13 +269,13 @@ func TestRenderDashboard(t *testing.T) {
 
 func TestRender_EmptyData(t *testing.T) {
 	// All render functions should handle empty slices without panic
-	RenderClusters([]types.ClusterResponse{}, true)
-	RenderNodes([]types.NodeResponse{}, true)
-	RenderWorkloads([]types.WorkloadResponse{}, true)
-	RenderRecommendations([]types.RecommendationResponse{}, true)
-	RenderNamespaces([]types.NamespaceResponse{}, true)
-	RenderTeamCosts([]types.TeamCostResponse{}, true)
-	RenderDepartmentCosts([]types.DepartmentCostResponse{}, true)
-	RenderNodeGroups([]types.NodeGroupResponse{}, true)
-	RenderPersistentVolumes([]types.PersistentVolumeResponse{}, true)
+	RenderClusters([]types.ClusterResponse{}, 0, true)
+	RenderNodes([]types.NodeResponse{}, 0, true)
+	RenderWorkloads([]types.WorkloadResponse{}, 0, true)
+	RenderRecommendations([]types.RecommendationResponse{}, 0, true)
+	RenderNamespaces([]types.NamespaceResponse{}, 0, true)
+	RenderTeamCosts([]types.TeamCostResponse{}, 0, true)
+	RenderDepartmentCosts([]types.DepartmentCostResponse{}, 0, true)
+	RenderNodeGroups([]types.NodeGroupResponse{}, 0, true)
+	RenderPersistentVolumes([]types.PersistentVolumeResponse{}, 0, true)
 }

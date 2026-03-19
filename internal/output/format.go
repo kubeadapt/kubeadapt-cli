@@ -93,3 +93,21 @@ func ShortID(id string) string {
 	}
 	return id
 }
+
+func colorPercent(v *float64, noColor bool) string {
+	if v == nil {
+		return "-"
+	}
+	s := FormatPercent(*v)
+	if noColor {
+		return s
+	}
+	switch {
+	case *v > 70:
+		return StyleSuccess.Render(s)
+	case *v > 40:
+		return StyleWarning.Render(s)
+	default:
+		return StyleError.Render(s)
+	}
+}

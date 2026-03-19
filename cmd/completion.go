@@ -7,8 +7,9 @@ import (
 )
 
 var completionCmd = &cobra.Command{
-	Use:   "completion [bash|zsh|fish|powershell]",
-	Short: "Generate shell completion scripts",
+	Use:     "completion [bash|zsh|fish|powershell]",
+	Short:   "Generate shell completion scripts",
+	GroupID: groupUtility,
 	Long: `Generate shell completion scripts for kubeadapt.
 
 To load completions:

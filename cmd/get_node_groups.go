@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -8,26 +11,27 @@ import (
 var getNodeGroupsCmd = &cobra.Command{
 	Use:   "node-groups",
 	Short: "List node groups",
+	Example: `  kubeadapt get node-groups
+  kubeadapt get node-groups --cluster-id abc123`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClient()
+		client, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-
 		clusterID, _ := cmd.Flags().GetString("cluster-id")
-
-		resp, err := client.GetNodeGroups(cmd.Context(), clusterID)
+		resp, err := fetchWithSpinner(cmd.Context(), "Fetching node groups...", func(ctx context.Context) (*types.NodeGroupListResponse, error) {
+			return client.GetNodeGroups(ctx, clusterID)
+		})
 		if err != nil {
 			return err
 		}
-
-		return renderOutput(outputFmt, resp, func() {
-			output.RenderNodeGroups(resp.NodeGroups, noColor)
+		return renderOutputFromCmd(cmd, resp, func() {
+			output.RenderNodeGroups(resp.NodeGroups, resp.Total, isNoColor(cmd))
 		})
 	},
 }
 
 func init() {
-	getNodeGroupsCmd.Flags().String("cluster-id", "", "Filter by cluster ID")
+	addClusterIDFlag(getNodeGroupsCmd)
 	getCmd.AddCommand(getNodeGroupsCmd)
 }

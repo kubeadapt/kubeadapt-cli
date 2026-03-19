@@ -8,19 +8,19 @@ import (
 var getDashboardCmd = &cobra.Command{
 	Use:   "dashboard",
 	Short: "Show organization dashboard",
+	Example: `  kubeadapt get dashboard
+  kubeadapt get dashboard -o yaml`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClient()
+		client, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-
-		resp, err := client.GetDashboard(cmd.Context())
+		resp, err := fetchWithSpinner(cmd.Context(), "Fetching dashboard...", client.GetDashboard)
 		if err != nil {
 			return err
 		}
-
-		return renderOutput(outputFmt, resp, func() {
-			output.RenderDashboard(resp, noColor)
+		return renderOutputFromCmd(cmd, resp, func() {
+			output.RenderDashboard(resp, isNoColor(cmd))
 		})
 	},
 }

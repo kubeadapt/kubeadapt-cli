@@ -10,33 +10,41 @@ import (
 
 const (
 	defaultAPIURL = "https://public-api.kubeadapt.io"
-	configDir     = ".kubeadapt"
 	configFile    = "config.yaml"
 )
 
-// Config holds the CLI configuration.
 type Config struct {
-	APIURL string `yaml:"api_url"`
-	APIKey string `yaml:"api_key"`
+	Version int    `yaml:"version"`
+	APIURL  string `yaml:"api_url"`
+	APIKey  string `yaml:"api_key"`
 }
 
-// Default returns a Config with default values.
 func Default() *Config {
 	return &Config{
-		APIURL: defaultAPIURL,
+		Version: 1,
+		APIURL:  defaultAPIURL,
 	}
 }
 
-// DefaultPath returns the default config file path.
 func DefaultPath() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "kubeadapt", configFile)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, configDir, configFile)
+	legacyPath := filepath.Join(home, ".kubeadapt", configFile)
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join(home, ".config", "kubeadapt", configFile)
+	}
+	return filepath.Join(configDir, "kubeadapt", configFile)
 }
 
-// Load reads the config from the given path, or the default path if empty.
 func Load(path string) (*Config, error) {
 	if path == "" {
 		path = DefaultPath()
@@ -52,10 +60,13 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
+	if cfg.Version == 0 {
+		cfg.Version = 1
+	}
+
 	return cfg, nil
 }
 
-// Save writes the config to the given path, or the default path if empty.
 func Save(cfg *Config, path string) error {
 	if path == "" {
 		path = DefaultPath()
@@ -78,7 +89,6 @@ func Save(cfg *Config, path string) error {
 	return nil
 }
 
-// MaskAPIKey returns a masked version of the API key for display.
 func MaskAPIKey(key string) string {
 	if len(key) <= 8 {
 		return "****"

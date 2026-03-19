@@ -142,13 +142,6 @@ linters:
           - revive
         text: "avoid meaningless package names"
 
-      # TUI packages implement fixed Bubbletea interfaces (Init/Update/View);
-      # doc comments on each implementation method are boilerplate noise.
-      - path: internal/tui
-        linters:
-          - revive
-        text: "exported:"
-
       - linters:
           - staticcheck
         text: "SA1019:"

@@ -34,8 +34,7 @@ pre-commit:
       run: golangci-lint run --new-from-rev=HEAD~
       stage_fixed: false
 
-# pre-push:
-#   commands:
-#     # Run tests with race detector and coverage
-#     test:
-#       run: go test -race -cover ./...
+pre-push:
+  commands:
+    test:
+      run: go test -race -cover ./...

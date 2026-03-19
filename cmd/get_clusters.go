@@ -8,19 +8,19 @@ import (
 var getClustersCmd = &cobra.Command{
 	Use:   "clusters",
 	Short: "List all clusters",
+	Example: `  kubeadapt get clusters
+  kubeadapt get clusters -o json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClient()
+		client, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-
-		resp, err := client.GetClusters(cmd.Context())
+		resp, err := fetchWithSpinner(cmd.Context(), "Fetching clusters...", client.GetClusters)
 		if err != nil {
 			return err
 		}
-
-		return renderOutput(outputFmt, resp, func() {
-			output.RenderClusters(resp.Clusters, noColor)
+		return renderOutputFromCmd(cmd, resp, func() {
+			output.RenderClusters(resp.Clusters, resp.Total, isNoColor(cmd))
 		})
 	},
 }

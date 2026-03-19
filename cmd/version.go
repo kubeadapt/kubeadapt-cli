@@ -10,8 +10,10 @@ import (
 )
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print version information",
+	Use:     "version",
+	Short:   "Print version information",
+	GroupID: groupUtility,
+	Example: `  kubeadapt version`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("kubeadapt %s\n", version.Version)
 		fmt.Printf("  Commit:     %s\n", version.Commit)

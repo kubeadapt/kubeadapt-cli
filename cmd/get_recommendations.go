@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -8,34 +11,35 @@ import (
 var getRecommendationsCmd = &cobra.Command{
 	Use:   "recommendations",
 	Short: "List recommendations",
+	Example: `  kubeadapt get recommendations
+  kubeadapt get recommendations --status open --type rightsize
+  kubeadapt get recommendations --cluster-id abc123 --limit 5`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClient()
+		client, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-
 		clusterID, _ := cmd.Flags().GetString("cluster-id")
 		recType, _ := cmd.Flags().GetString("type")
 		status, _ := cmd.Flags().GetString("status")
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
-
-		resp, err := client.GetRecommendations(cmd.Context(), clusterID, recType, status, limit, offset)
+		resp, err := fetchWithSpinner(cmd.Context(), "Fetching recommendations...", func(ctx context.Context) (*types.RecommendationListResponse, error) {
+			return client.GetRecommendations(ctx, clusterID, recType, status, limit, offset)
+		})
 		if err != nil {
 			return err
 		}
-
-		return renderOutput(outputFmt, resp, func() {
-			output.RenderRecommendations(resp.Recommendations, noColor)
+		return renderOutputFromCmd(cmd, resp, func() {
+			output.RenderRecommendations(resp.Recommendations, resp.Total, isNoColor(cmd))
 		})
 	},
 }
 
 func init() {
-	getRecommendationsCmd.Flags().String("cluster-id", "", "Filter by cluster ID")
+	addClusterIDFlag(getRecommendationsCmd)
 	getRecommendationsCmd.Flags().String("type", "", "Filter by recommendation type")
 	getRecommendationsCmd.Flags().String("status", "", "Filter by status")
-	getRecommendationsCmd.Flags().Int("limit", 0, "Maximum number of results")
-	getRecommendationsCmd.Flags().Int("offset", 0, "Number of results to skip")
+	addLimitOffsetFlags(getRecommendationsCmd)
 	getCmd.AddCommand(getRecommendationsCmd)
 }

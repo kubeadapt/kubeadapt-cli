@@ -9,7 +9,6 @@ var (
 	ColorYellow  = lipgloss.Color("#EAB308") // Yellow - warnings
 	ColorRed     = lipgloss.Color("#EF4444") // Red - errors
 	ColorGray    = lipgloss.Color("#6B7280") // Gray - muted text
-	ColorWhite   = lipgloss.Color("#F9FAFB") // White
 )
 
 // Common styles.
