@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,20 +16,32 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-const defaultTimeout = 30 * time.Second
+const (
+	defaultTimeout = 30 * time.Second
+	userAgent      = "kubeadapt-cli/dev"
+	errorBodyLimit = 200
+)
 
-// Client is the Kubeadapt API client.
+// Client is the Kubeadapt public API HTTP client. It speaks the envelope
+// response protocol, captures rate-limit headers from every response, and
+// optionally retries once on HTTP 429. The zero value is not usable; construct
+// it via NewClient.
 type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
 	logger     *zap.Logger
+	retryOnRL  bool
+	maxRetries int
+	sleeper    func(time.Duration)
+	rateLimit  *rateLimitSnapshot
 }
 
 // Option configures the Client.
 type Option func(*Client)
 
-// WithTimeout sets the HTTP client timeout.
+// WithTimeout sets the HTTP client timeout. It mutates the underlying
+// http.Client; pair with WithHTTPClient if a custom transport is needed.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Client) {
 		c.httpClient.Timeout = d
@@ -40,26 +51,61 @@ func WithTimeout(d time.Duration) Option {
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
-		c.httpClient = hc
+		if hc != nil {
+			c.httpClient = hc
+		}
 	}
 }
 
 // WithLogger sets the debug logger.
 func WithLogger(l *zap.Logger) Option {
 	return func(c *Client) {
-		c.logger = l
+		if l != nil {
+			c.logger = l
+		}
+	}
+}
+
+// WithRetryOnRateLimit enables or disables an automatic single retry after a
+// 429 response. The retry respects Retry-After. Defaults to false.
+func WithRetryOnRateLimit(enable bool) Option {
+	return func(c *Client) {
+		c.retryOnRL = enable
+	}
+}
+
+// WithMaxRetries sets the maximum number of retries the client will issue
+// after a 429 response. Values below zero are clamped to zero. Defaults to 1.
+func WithMaxRetries(n int) Option {
+	return func(c *Client) {
+		if n < 0 {
+			n = 0
+		}
+		c.maxRetries = n
+	}
+}
+
+// withSleeper overrides the sleep function used between retries. It is
+// unexported and intended for tests in the same package.
+func withSleeper(fn func(time.Duration)) Option {
+	return func(c *Client) {
+		if fn != nil {
+			c.sleeper = fn
+		}
 	}
 }
 
 // NewClient creates a new API client.
 func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	c := &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		httpClient: &http.Client{
-			Timeout: defaultTimeout,
-		},
-		logger: zap.NewNop(),
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		apiKey:     apiKey,
+		httpClient: &http.Client{Timeout: defaultTimeout},
+		logger:     zap.NewNop(),
+		retryOnRL:  false,
+		maxRetries: 1,
+		sleeper:    time.Sleep,
+		rateLimit:  &rateLimitSnapshot{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -67,318 +113,183 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	return c
 }
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body any, result any) error {
-	start := time.Now()
-	c.logger.Debug("API request", zap.String("method", method), zap.String("path", path))
+// RateLimit returns the most recent rate-limit snapshot captured from API
+// responses. The returned value is a copy and safe to retain.
+func (c *Client) RateLimit() RateLimit {
+	return c.rateLimit.load()
+}
 
-	u := strings.TrimRight(c.baseURL, "/") + path
+// DoEnvelopeGet issues a GET request against the API and decodes the envelope
+// response. It returns the unwrapped Data payload, a pointer to the Meta
+// block, and an error.
+//
+// Errors fall into three buckets:
+//   - Transport / decode failures: returned as a plain error wrapping the
+//     underlying cause. Callers can check via errors.Is on context errors.
+//   - API-level errors (envelope.Error populated, or non-2xx status): returned
+//     as *APIError with StatusCode, Code, Message, and Details. On a 429 the
+//     RetryAfter field is populated from the Retry-After header.
+//   - Success: nil error, populated data and meta.
+//
+// When WithRetryOnRateLimit(true) is set, a 429 response triggers up to
+// maxRetries additional attempts after sleeping for the Retry-After delay
+// (defaulting to one second if absent or malformed).
+func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params url.Values) (T, *types.Meta, error) {
+	var zero T
 
-	var bodyReader io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
+	fullURL := c.baseURL + path
+	if len(params) > 0 {
+		fullURL = fullURL + "?" + params.Encode()
+	}
+
+	attempt := 0
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 		if err != nil {
-			return fmt.Errorf("marshaling request body: %w", err)
+			return zero, nil, fmt.Errorf("creating request: %w", err)
 		}
-		bodyReader = bytes.NewReader(data)
-	}
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", userAgent)
 
-	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
+		start := time.Now()
+		c.logger.Debug("api request",
+			zap.String("method", http.MethodGet),
+			zap.String("url", fullURL),
+			zap.Int("attempt", attempt),
+		)
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		if err := json.Unmarshal(respBody, apiErr); err != nil {
-			apiErr.Message = string(respBody)
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return zero, nil, fmt.Errorf("executing request: %w", err)
 		}
-		c.logger.Debug("API error",
-			zap.String("path", path),
+
+		c.rateLimit.captureFromHeaders(resp.Header)
+
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return zero, nil, fmt.Errorf("reading response: %w", readErr)
+		}
+
+		c.logger.Debug("api response",
+			zap.String("url", fullURL),
 			zap.Int("status", resp.StatusCode),
 			zap.Duration("duration", time.Since(start)),
+			zap.String("request_id", resp.Header.Get("X-Request-ID")),
 		)
-		return apiErr
+
+		if resp.StatusCode == http.StatusTooManyRequests && c.retryOnRL && attempt < c.maxRetries {
+			d := ParseRetryAfter(resp.Header.Get("Retry-After"))
+			if d <= 0 {
+				d = time.Second
+			}
+			c.sleeper(d)
+			attempt++
+			continue
+		}
+
+		var env types.Envelope[T]
+		decodeErr := json.Unmarshal(body, &env)
+
+		if env.Error != nil {
+			apiErr := &APIError{
+				StatusCode: resp.StatusCode,
+				Code:       ErrorCode(env.Error.Code),
+				Message:    env.Error.Message,
+				Details:    env.Error.Details,
+			}
+			if apiErr.Code == CodeRateLimited {
+				apiErr.RetryAfter = ParseRetryAfter(resp.Header.Get("Retry-After"))
+			}
+			return zero, nil, apiErr
+		}
+
+		if resp.StatusCode >= 400 {
+			excerpt := string(body)
+			if len(excerpt) > errorBodyLimit {
+				excerpt = excerpt[:errorBodyLimit]
+			}
+			apiErr := &APIError{
+				StatusCode: resp.StatusCode,
+				Message:    excerpt,
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				apiErr.Code = CodeRateLimited
+				apiErr.RetryAfter = ParseRetryAfter(resp.Header.Get("Retry-After"))
+			}
+			return zero, nil, apiErr
+		}
+
+		if decodeErr != nil {
+			return zero, nil, fmt.Errorf("decoding response: %w", decodeErr)
+		}
+
+		return env.Data, &env.Meta, nil
 	}
+}
 
-	c.logger.Debug("API response",
-		zap.String("path", path),
-		zap.Int("status", resp.StatusCode),
-		zap.Duration("duration", time.Since(start)),
-	)
+// appendCursorParams adds cursor, limit, and include_total to params using the
+// standard query keys understood by the Kubeadapt public API. A nil params
+// map is allocated lazily so callers can write
+// p := appendCursorParams(nil, ...). limit<=0 omits the limit param.
+func appendCursorParams(params url.Values, cursor string, limit int, includeTotal bool) url.Values {
+	if params == nil {
+		params = url.Values{}
+	}
+	if cursor != "" {
+		params.Set("cursor", cursor)
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	if includeTotal {
+		params.Set("include_total", "true")
+	}
+	return params
+}
 
-	if result != nil && resp.StatusCode != http.StatusNoContent {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("decoding response: %w", err)
+// pickScopedOrFlat chooses between the cluster-scoped path (when a single
+// cluster ID is supplied) and the flat path (otherwise). It returns the path
+// to call plus the comma-separated cluster_id value to attach as a query
+// param. When using the scoped path the cluster_id is consumed by the URL
+// itself and the returned csvParam is empty.
+func pickScopedOrFlat(
+	scopedPathFn func(clusterID string) string,
+	flatPath string,
+	clusterIDs []string,
+) (path, csvParam string) {
+	nonEmpty := make([]string, 0, len(clusterIDs))
+	for _, id := range clusterIDs {
+		if id != "" {
+			nonEmpty = append(nonEmpty, id)
 		}
 	}
+	if len(nonEmpty) == 1 {
+		return scopedPathFn(nonEmpty[0]), ""
+	}
+	return flatPath, strings.Join(nonEmpty, ",")
+}
 
+// validateNoCostMode returns an *APIError with code INVALID_COST_MODE if the
+// caller has set the cost_mode query param. Per-resource methods that call
+// endpoints which reject cost_mode (cluster, node, node-group, recommendation,
+// organization root) should invoke this BEFORE sending the request so that the
+// CLI rejects locally — fast feedback, no wasted network round-trip.
+func validateNoCostMode(params url.Values, endpoint string) error {
+	if params == nil {
+		return nil
+	}
+	if v := params.Get("cost_mode"); v != "" {
+		return &APIError{
+			StatusCode: http.StatusUnprocessableEntity,
+			Code:       CodeInvalidCostMode,
+			Message:    fmt.Sprintf("%s does not accept cost_mode", endpoint),
+			Details: []map[string]any{{
+				"field":   "cost_mode",
+				"allowed": []string{},
+			}},
+		}
+	}
 	return nil
-}
-
-func (c *Client) get(ctx context.Context, path string, params url.Values, result any) error {
-	if len(params) > 0 {
-		path = path + "?" + params.Encode()
-	}
-	return c.doRequest(ctx, http.MethodGet, path, nil, result)
-}
-
-// GetOverview fetches the organization overview.
-func (c *Client) GetOverview(ctx context.Context) (*types.OverviewResponse, error) {
-	var resp types.OverviewResponse
-	err := c.get(ctx, "/v1/overview", nil, &resp)
-	return &resp, err
-}
-
-// GetDashboard fetches the organization dashboard.
-func (c *Client) GetDashboard(ctx context.Context) (*types.DashboardResponse, error) {
-	var resp types.DashboardResponse
-	err := c.get(ctx, "/v1/dashboard", nil, &resp)
-	return &resp, err
-}
-
-// GetClusters fetches all clusters.
-func (c *Client) GetClusters(ctx context.Context) (*types.ClusterListResponse, error) {
-	var resp types.ClusterListResponse
-	err := c.get(ctx, "/v1/clusters", nil, &resp)
-	return &resp, err
-}
-
-// GetCluster fetches a single cluster by ID.
-func (c *Client) GetCluster(ctx context.Context, id string) (*types.ClusterResponse, error) {
-	var resp types.ClusterResponse
-	err := c.get(ctx, "/v1/clusters/"+id, nil, &resp)
-	return &resp, err
-}
-
-// GetWorkloads fetches workloads with optional filters.
-func (c *Client) GetWorkloads(ctx context.Context, clusterID, namespace, kind string, limit, offset int) (*types.WorkloadListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	if namespace != "" {
-		params.Set("namespace", namespace)
-	}
-	if kind != "" {
-		params.Set("kind", kind)
-	}
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
-	}
-	if offset > 0 {
-		params.Set("offset", strconv.Itoa(offset))
-	}
-	var resp types.WorkloadListResponse
-	err := c.get(ctx, "/v1/workloads", params, &resp)
-	return &resp, err
-}
-
-// GetNodes fetches nodes with optional filters.
-func (c *Client) GetNodes(ctx context.Context, clusterID, nodeGroup string, limit, offset int) (*types.NodeListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	if nodeGroup != "" {
-		params.Set("node_group", nodeGroup)
-	}
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
-	}
-	if offset > 0 {
-		params.Set("offset", strconv.Itoa(offset))
-	}
-	var resp types.NodeListResponse
-	err := c.get(ctx, "/v1/nodes", params, &resp)
-	return &resp, err
-}
-
-// GetRecommendations fetches recommendations with optional filters.
-func (c *Client) GetRecommendations(ctx context.Context, clusterID, recType, status string, limit, offset int) (*types.RecommendationListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	if recType != "" {
-		params.Set("recommendation_type", recType)
-	}
-	if status != "" {
-		params.Set("status", status)
-	}
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
-	}
-	if offset > 0 {
-		params.Set("offset", strconv.Itoa(offset))
-	}
-	var resp types.RecommendationListResponse
-	err := c.get(ctx, "/v1/recommendations", params, &resp)
-	return &resp, err
-}
-
-// GetCostsTeams fetches cost breakdown by team.
-func (c *Client) GetCostsTeams(ctx context.Context, clusterID string) (*types.TeamCostListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	var resp types.TeamCostListResponse
-	err := c.get(ctx, "/v1/costs/teams", params, &resp)
-	return &resp, err
-}
-
-// GetCostsDepartments fetches cost breakdown by department.
-func (c *Client) GetCostsDepartments(ctx context.Context, clusterID string) (*types.DepartmentCostListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	var resp types.DepartmentCostListResponse
-	err := c.get(ctx, "/v1/costs/departments", params, &resp)
-	return &resp, err
-}
-
-// GetNodeGroups fetches node groups.
-func (c *Client) GetNodeGroups(ctx context.Context, clusterID string) (*types.NodeGroupListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	var resp types.NodeGroupListResponse
-	err := c.get(ctx, "/v1/node-groups", params, &resp)
-	return &resp, err
-}
-
-// GetNamespaces fetches namespaces.
-func (c *Client) GetNamespaces(ctx context.Context, clusterID, team, department string) (*types.NamespaceListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	if team != "" {
-		params.Set("team", team)
-	}
-	if department != "" {
-		params.Set("department", department)
-	}
-	var resp types.NamespaceListResponse
-	err := c.get(ctx, "/v1/namespaces", params, &resp)
-	return &resp, err
-}
-
-// GetPersistentVolumes fetches persistent volumes.
-func (c *Client) GetPersistentVolumes(ctx context.Context, clusterID, namespace, storageClass string) (*types.PersistentVolumeListResponse, error) {
-	params := url.Values{}
-	if clusterID != "" {
-		params.Set("cluster_id", clusterID)
-	}
-	if namespace != "" {
-		params.Set("namespace", namespace)
-	}
-	if storageClass != "" {
-		params.Set("storage_class", storageClass)
-	}
-	var resp types.PersistentVolumeListResponse
-	err := c.get(ctx, "/v1/persistent-volumes", params, &resp)
-	return &resp, err
-}
-
-// --- Metrics / Detail endpoints ---
-
-// GetClusterDashboard fetches dashboard summary metrics for a cluster.
-func (c *Client) GetClusterDashboard(ctx context.Context, clusterID string) (*types.ClusterDashboardResponse, error) {
-	var resp types.ClusterDashboardResponse
-	err := c.get(ctx, "/v1/clusters/"+clusterID+"/dashboard", nil, &resp)
-	return &resp, err
-}
-
-// GetClusterCostDistribution fetches time-series cost/utilization data.
-func (c *Client) GetClusterCostDistribution(ctx context.Context, clusterID, timeframe string) (*types.CostDistributionResponse, error) {
-	params := url.Values{}
-	if timeframe != "" {
-		params.Set("timeframe", timeframe)
-	}
-	var resp types.CostDistributionResponse
-	err := c.get(ctx, "/v1/clusters/"+clusterID+"/cost-distribution", params, &resp)
-	return &resp, err
-}
-
-// GetNodeMetrics fetches time-series CPU/memory history for a node.
-func (c *Client) GetNodeMetrics(ctx context.Context, nodeUID, clusterID, timeframe string) (*types.NodeMetricsResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	if timeframe != "" {
-		params.Set("timeframe", timeframe)
-	}
-	var resp types.NodeMetricsResponse
-	err := c.get(ctx, "/v1/nodes/"+nodeUID+"/metrics", params, &resp)
-	return &resp, err
-}
-
-// GetNodeGroupDetails fetches detailed node group information.
-func (c *Client) GetNodeGroupDetails(ctx context.Context, groupName, clusterID string) (*types.NodeGroupDetailResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	var resp types.NodeGroupDetailResponse
-	err := c.get(ctx, "/v1/node-groups/"+groupName+"/details", params, &resp)
-	return &resp, err
-}
-
-// GetWorkloadMetrics fetches time-series CPU/memory/cost trends for a workload.
-func (c *Client) GetWorkloadMetrics(ctx context.Context, workloadUID, clusterID, timeframe string) (*types.WorkloadMetricsResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	if timeframe != "" {
-		params.Set("timeframe", timeframe)
-	}
-	var resp types.WorkloadMetricsResponse
-	err := c.get(ctx, "/v1/workloads/"+workloadUID+"/metrics", params, &resp)
-	return &resp, err
-}
-
-// GetWorkloadNodes fetches node distribution for a workload.
-func (c *Client) GetWorkloadNodes(ctx context.Context, workloadUID, clusterID string) (*types.WorkloadNodesResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	var resp types.WorkloadNodesResponse
-	err := c.get(ctx, "/v1/workloads/"+workloadUID+"/nodes", params, &resp)
-	return &resp, err
-}
-
-// GetNamespaceDetails fetches detailed namespace information.
-func (c *Client) GetNamespaceDetails(ctx context.Context, name, clusterID string) (*types.NamespaceDetailResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	var resp types.NamespaceDetailResponse
-	err := c.get(ctx, "/v1/namespaces/"+name+"/details", params, &resp)
-	return &resp, err
-}
-
-// GetNamespaceTrends fetches time-series trends for a namespace.
-func (c *Client) GetNamespaceTrends(ctx context.Context, name, clusterID, timeframe string) (*types.NamespaceTrendsResponse, error) {
-	params := url.Values{}
-	params.Set("cluster_id", clusterID)
-	if timeframe != "" {
-		params.Set("timeframe", timeframe)
-	}
-	var resp types.NamespaceTrendsResponse
-	err := c.get(ctx, "/v1/namespaces/"+name+"/trends", params, &resp)
-	return &resp, err
 }

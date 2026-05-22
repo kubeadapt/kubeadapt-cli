@@ -1,22 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
-	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
-
-// fetchWithSpinner shows a spinner while fn executes, then hides it.
-func fetchWithSpinner[T any](ctx context.Context, msg string, fn func(context.Context) (T, error)) (T, error) {
-	sp := newSpinner(msg)
-	sp.start()
-	result, err := fn(ctx)
-	sp.stop()
-	return result, err
-}
 
 func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
 	rc := getRunContext(cmd)
@@ -29,44 +18,72 @@ func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
 	return api.NewClient(rc.Config.APIURL, rc.Config.APIKey, api.WithLogger(rc.Logger)), nil
 }
 
-func renderOutputFromCmd(cmd *cobra.Command, data any, tableFunc func()) error {
-	rc := getRunContext(cmd)
-	format := "table"
-	if rc != nil {
-		format = rc.OutputFmt
-	}
-	switch format {
-	case "json":
-		return output.JSON(data)
-	case "yaml":
-		return output.YAML(data)
-	default:
-		tableFunc()
-		return nil
-	}
+// Flag-name constants for the persistent pagination + cost-mode flags
+// registered on getCmd. Used by parsePagedFlags and any subcommand that
+// needs to read them by name.
+const (
+	flagCostMode     = "cost-mode"
+	flagCursor       = "cursor"
+	flagLimit        = "limit"
+	flagPaginate     = "paginate"
+	flagIncludeTotal = "include-total"
+)
+
+// Output format constants for the --output / -o flag. Used in every list and
+// detail subcommand to dispatch between table, JSON, and YAML rendering.
+const (
+	formatTable = "table"
+	formatJSON  = "json"
+	formatYAML  = "yaml"
+)
+
+// PagedFlags is the resolved set of pagination + cost-mode flags shared by
+// every `kubeadapt get` list subcommand. It mirrors api.PagedOpts +
+// api.CostModeOpt and is produced by parsePagedFlags(cmd).
+type PagedFlags struct {
+	CostMode     string
+	Cursor       string
+	Limit        int
+	Paginate     bool
+	IncludeTotal bool
 }
 
-func addClusterIDFlag(cmd *cobra.Command) {
-	cmd.Flags().String("cluster-id", "", "Filter by cluster ID")
-}
-
-func addLimitOffsetFlags(cmd *cobra.Command) {
-	cmd.Flags().Int("limit", 0, "Maximum number of results")
-	cmd.Flags().Int("offset", 0, "Number of results to skip")
-}
-
-func addNamespaceFlag(cmd *cobra.Command) {
-	cmd.Flags().String("namespace", "", "Filter by namespace")
-}
-
-func addTimeframeFlag(cmd *cobra.Command) {
-	cmd.Flags().String("timeframe", "", "Time range (e.g. 24h, 7d, 30d)")
-}
-
-func isNoColor(cmd *cobra.Command) bool {
-	rc := getRunContext(cmd)
-	if rc != nil {
-		return rc.NoColor
+func isValidCostMode(s string) bool {
+	switch s {
+	case "fully_loaded", "workload_only":
+		return true
 	}
 	return false
+}
+
+// parsePagedFlags reads the PersistentFlags from the get command tree and
+// returns them as a PagedFlags. It validates the cost-mode enum and the
+// limit range; on error it returns an error suitable for printing to the
+// user. It MUST be called from every `get *` list subcommand's RunE.
+func parsePagedFlags(cmd *cobra.Command) (PagedFlags, error) {
+	var f PagedFlags
+	var err error
+
+	if f.CostMode, err = cmd.Flags().GetString(flagCostMode); err != nil {
+		return f, fmt.Errorf("read %s: %w", flagCostMode, err)
+	}
+	if !isValidCostMode(f.CostMode) {
+		return f, fmt.Errorf("invalid --cost-mode %q (must be one of: fully_loaded, workload_only)", f.CostMode)
+	}
+	if f.Cursor, err = cmd.Flags().GetString(flagCursor); err != nil {
+		return f, fmt.Errorf("read %s: %w", flagCursor, err)
+	}
+	if f.Limit, err = cmd.Flags().GetInt(flagLimit); err != nil {
+		return f, fmt.Errorf("read %s: %w", flagLimit, err)
+	}
+	if f.Limit < 1 || f.Limit > 500 {
+		return f, fmt.Errorf("invalid --limit %d (must be 1..500)", f.Limit)
+	}
+	if f.Paginate, err = cmd.Flags().GetBool(flagPaginate); err != nil {
+		return f, fmt.Errorf("read %s: %w", flagPaginate, err)
+	}
+	if f.IncludeTotal, err = cmd.Flags().GetBool(flagIncludeTotal); err != nil {
+		return f, fmt.Errorf("read %s: %w", flagIncludeTotal, err)
+	}
+	return f, nil
 }

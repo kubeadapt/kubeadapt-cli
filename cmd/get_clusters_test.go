@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/config"
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -22,25 +23,29 @@ func setupTestContext(t *testing.T, serverURL, key, format string) context.Conte
 		OutputFmt: format,
 		NoColor:   true,
 	}
-	ctx := context.WithValue(context.Background(), runContextKey{}, rc)
+	ctx := context.WithValue(t.Context(), runContextKey{}, rc)
+
+	// The new persistent flags (cost-mode/cursor/limit/paginate/include-total)
+	// live on getCmd. When tests call getClustersCmd.RunE directly they bypass
+	// the parent's flag inheritance, so parsePagedFlags fails with "flag not
+	// defined". Bind the parent's persistent flag set here so direct RunE calls
+	// see the defaults. Safe to call multiple times — cobra dedupes by name.
+	if getClustersCmd.Flags().Lookup(flagCostMode) == nil {
+		getClustersCmd.Flags().AddFlagSet(getCmd.PersistentFlags())
+	}
 	return ctx
 }
 
 func TestGetClusters_TableOutput(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
+	server := testutil.NewMockServer(t)
 
 	ctx := setupTestContext(t, server.URL, "test-key", "table")
 	getClustersCmd.SetContext(ctx)
-	err := getClustersCmd.RunE(getClustersCmd, nil)
-	if err != nil {
-		t.Fatalf("getClustersCmd.RunE() = %v, want nil", err)
-	}
+	require.NoError(t, getClustersCmd.RunE(getClustersCmd, nil))
 }
 
 func TestGetClusters_JSONOutput(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
+	server := testutil.NewMockServer(t)
 
 	ctx := setupTestContext(t, server.URL, "test-key", "json")
 	getClustersCmd.SetContext(ctx)
@@ -60,13 +65,8 @@ func TestGetClusters_JSONOutput(t *testing.T) {
 	io.Copy(&buf, r)
 	os.Stdout = oldStdout
 
-	if err != nil {
-		t.Fatalf("getClustersCmd.RunE() = %v, want nil", err)
-	}
-
-	if !json.Valid(buf.Bytes()) {
-		t.Errorf("output is not valid JSON: %s", buf.String())
-	}
+	require.NoError(t, err)
+	assert.True(t, json.Valid(buf.Bytes()), "output is not valid JSON: %s", buf.String())
 }
 
 func TestGetClusters_NoAPIKey(t *testing.T) {
@@ -74,11 +74,6 @@ func TestGetClusters_NoAPIKey(t *testing.T) {
 	getClustersCmd.SetContext(ctx)
 
 	err := getClustersCmd.RunE(getClustersCmd, nil)
-	if err == nil {
-		t.Fatalf("getClustersCmd.RunE() = nil, want error")
-	}
-
-	if !strings.Contains(err.Error(), "no API key") {
-		t.Errorf("error message = %q, want to contain 'no API key'", err.Error())
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no API key")
 }

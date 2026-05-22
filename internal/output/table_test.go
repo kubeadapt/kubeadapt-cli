@@ -1,281 +1,309 @@
 package output
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
-	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
 )
 
-func TestRenderOverview(t *testing.T) {
-	overview := testutil.SampleOverview()
-	// Should not panic with noColor=true
-	RenderOverview(overview, true)
-	// Should not panic with noColor=false
-	RenderOverview(overview, false)
+func init() {
+	SetNoColor(true)
+}
+
+func usdMoney(amount string) types.Money {
+	return types.Money{Amount: amount, Currency: "USD"}
+}
+
+func sampleCluster(name string) types.Cluster {
+	return types.Cluster{
+		ID:   "cluster-" + name,
+		Kind: "cluster",
+		Metadata: types.ClusterMetadata{
+			Name:        name,
+			Provider:    "aws",
+			Region:      "us-east-1",
+			Environment: "production",
+			Status:      "connected",
+			K8sVersion:  "1.29",
+		},
+		Capacity: types.ClusterCapacity{
+			CPU:    types.CapacityCPU{TotalCores: 96, AllocatableCores: 90},
+			Memory: types.CapacityMemory{TotalBytes: 412316860416, AllocatableBytes: 400000000000},
+		},
+		Utilization: types.ClusterUtilization{
+			CPU:    types.UtilizationCPU{UsedCores: 48, UtilizationPercent: 50.0},
+			Memory: types.UtilizationMemory{UsedBytes: 200000000000, UtilizationPercent: 50.0},
+			Counts: types.ClusterCounts{Nodes: 6, Pods: 120, Workloads: 30},
+		},
+		Cost: types.ClusterCost{
+			CurrentRunRateHourly: usdMoney("12.5000"),
+			LastUpdatedAt:        "2025-05-20T12:00:00Z",
+		},
+	}
 }
 
 func TestRenderClusters(t *testing.T) {
-	clusters := testutil.SampleClusters()
-	// Should not panic with normal data
-	RenderClusters(clusters, len(clusters), true)
-	// Should not panic with empty slice
-	RenderClusters([]types.ClusterResponse{}, 0, true)
+	var buf bytes.Buffer
+	items := []types.Cluster{sampleCluster("prod-east"), sampleCluster("prod-west")}
+	require.NoError(t, RenderClusters(&buf, items, nil))
+	out := buf.String()
+	for _, want := range []string{"prod-east", "prod-west", "$/hr", "$12.5000", "aws"} {
+		assert.Contains(t, out, want)
+	}
 }
 
-func TestFormatCost(t *testing.T) {
+func TestRenderClusters_Empty(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, RenderClusters(&buf, nil, nil))
+	assert.Contains(t, buf.String(), "No clusters")
+}
+
+func TestRenderClusters_WithPagination(t *testing.T) {
+	var buf bytes.Buffer
+	items := []types.Cluster{sampleCluster("prod-east")}
+	longCursor := "eyJ2IjoxLCJjIjoiYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5In0="
+	meta := &types.Meta{
+		Pagination: &types.Pagination{
+			NextCursor: longCursor,
+			HasMore:    true,
+			Limit:      50,
+		},
+	}
+	require.NoError(t, RenderClusters(&buf, items, meta))
+	out := buf.String()
+	assert.Contains(t, out, "--cursor="+longCursor)
+	assert.NotContains(t, out, "...")
+	assert.Contains(t, out, "Showing 1")
+	assert.Contains(t, out, "(limit 50)")
+	assert.Contains(t, out, "--paginate")
+}
+
+func TestRenderClusters_EndOfResults(t *testing.T) {
+	var buf bytes.Buffer
+	items := []types.Cluster{sampleCluster("only")}
+	meta := &types.Meta{
+		Pagination: &types.Pagination{HasMore: false, Limit: 100},
+	}
+	require.NoError(t, RenderClusters(&buf, items, meta))
+	assert.Contains(t, buf.String(), "End of results.")
+}
+
+func TestRenderOrganization(t *testing.T) {
+	var buf bytes.Buffer
+	org := types.Organization{
+		ID:   "org-1",
+		Kind: "organization",
+		Metadata: types.OrganizationMetadata{
+			Name:     "Acme",
+			Domain:   "acme.io",
+			PlanType: "enterprise",
+			IsActive: true,
+		},
+		Capacity: types.OrganizationCapacity{
+			CPU:    types.CapacityCPU{TotalCores: 192, AllocatableCores: 180},
+			Memory: types.CapacityMemory{TotalBytes: 824633720832},
+		},
+		Utilization: types.OrganizationUtilization{
+			CPU:    types.UtilizationCPU{UsedCores: 96, UtilizationPercent: 50.0},
+			Counts: types.OrganizationCounts{Clusters: 3, ConnectedClusters: 2},
+		},
+		Cost: types.OrganizationCost{CurrentRunRateHourly: usdMoney("42.1234")},
+	}
+	require.NoError(t, RenderOrganization(&buf, org))
+	out := buf.String()
+	for _, want := range []string{"Acme", "acme.io", "enterprise", "$42.1234", "Clusters"} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestRenderRecommendation(t *testing.T) {
+	var buf bytes.Buffer
+	rec := types.Recommendation{
+		ID:   "rec-1",
+		Kind: "recommendation",
+		Metadata: types.RecommendationMetadata{
+			RecommendationType: "rightsize_workload",
+			ResourceType:       "workload",
+			ResourceName:       "checkout-api",
+			Cluster:            types.NestedRef{ID: "c1", Name: "prod-east"},
+			Namespace:          "shop",
+			Priority:           "high",
+			RiskLevel:          "low",
+			Status:             "open",
+		},
+		Current: types.RecommendationSnapshot{HourlyCost: usdMoney("3.4500")},
+		Savings: types.RecommendationSavings{
+			EstimatedHourly: usdMoney("1.0000"),
+		},
+	}
+	require.NoError(t, RenderRecommendation(&buf, rec))
+	out := buf.String()
+	for _, want := range []string{"rec-1", "rightsize_workload", "checkout-api", "$1.0000", "$3.4500", "high"} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestFormatMoney_Wrappers(t *testing.T) {
 	tests := []struct {
-		input float64
-		want  string
+		name string
+		in   types.Money
+		want string
 	}{
-		{0, "$0.00"},
-		{1.5, "$1.50"},
-		{1234.56, "$1234.56"},
+		{"zero value", types.Money{}, "-"},
+		{"usd", usdMoney("12.5000"), "$12.5000"},
+		{"eur", types.Money{Amount: "9.9999", Currency: "EUR"}, "EUR 9.9999"},
 	}
 	for _, tt := range tests {
-		got := FormatCost(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatCost(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, FormatMoney(tt.in))
+		})
 	}
 }
 
-func TestFormatPercent(t *testing.T) {
+func TestFormatMoneyPtr(t *testing.T) {
+	assert.Equal(t, "-", FormatMoneyPtr(nil))
+	m := usdMoney("1.0000")
+	assert.Equal(t, "$1.0000", FormatMoneyPtr(&m))
+}
+
+func TestFormatCursor(t *testing.T) {
 	tests := []struct {
-		input float64
-		want  string
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", "(none)"},
+		{"short", "abc123", "abc123"},
+		{"long verbatim", "abcdefghijklmnopqrstuvwxyz0123456789", "abcdefghijklmnopqrstuvwxyz0123456789"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, FormatCursor(tt.in))
+		})
+	}
+}
+
+func TestPaginationFooter(t *testing.T) {
+	total := 1234
+	tests := []struct {
+		name    string
+		shown   int
+		meta    *types.Meta
+		want    []string
+		notWant []string
+		empty   bool
+	}{
+		{name: "nil meta", shown: 3, meta: nil, empty: true},
+		{name: "nil pagination", shown: 3, meta: &types.Meta{}, empty: true},
+		{
+			name:  "end of results",
+			shown: 3,
+			meta:  &types.Meta{Pagination: &types.Pagination{Limit: 100, HasMore: false}},
+			want:  []string{"Showing 3", "(limit 100)", "End of results."},
+		},
+		{
+			name:  "has more with cursor",
+			shown: 50,
+			meta: &types.Meta{Pagination: &types.Pagination{
+				Limit: 50, HasMore: true,
+				NextCursor: "eyJ2IjoxLCJjIjoiYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5In0=",
+			}},
+			want: []string{
+				"Showing 50",
+				"(limit 50)",
+				"--paginate",
+				"--cursor=eyJ2IjoxLCJjIjoiYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXowMTIzNDU2Nzg5In0=",
+			},
+			notWant: []string{"..."},
+		},
+		{
+			name:  "with total count",
+			shown: 50,
+			meta: &types.Meta{Pagination: &types.Pagination{
+				Limit: 50, HasMore: true, TotalCount: &total,
+				NextCursor: "shortcursor",
+			}},
+			want: []string{"Showing 50 of 1234", "shortcursor"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PaginationFooter(tt.shown, tt.meta)
+			if tt.empty {
+				assert.Empty(t, got)
+				return
+			}
+			for _, w := range tt.want {
+				assert.Contains(t, got, w)
+			}
+			for _, nw := range tt.notWant {
+				assert.NotContains(t, got, nw)
+			}
+		})
+	}
+}
+
+func TestFormatPercentage(t *testing.T) {
+	tests := []struct {
+		in   float64
+		want string
 	}{
 		{0, "0.0%"},
-		{42.5, "42.5%"},
+		{73.5, "73.5%"},
 		{100, "100.0%"},
+		{-1, "-"},
 	}
 	for _, tt := range tests {
-		got := FormatPercent(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatPercent(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, FormatPercentage(tt.in))
 	}
 }
 
-func TestFormatMemoryGB(t *testing.T) {
+func TestFormatBytes(t *testing.T) {
 	tests := []struct {
-		input float64
-		want  string
+		in   int64
+		want string
 	}{
-		{0.5, "512 MB"},
-		{1.0, "1.0 GB"},
-		{16.5, "16.5 GB"},
+		{0, "0 B"},
+		{512, "512 B"},
+		{1024, "1.0 KiB"},
+		{1536, "1.5 KiB"},
+		{1024 * 1024, "1.0 MiB"},
+		{int64(1024) * 1024 * 1024, "1.0 GiB"},
+		{-5, "-"},
 	}
 	for _, tt := range tests {
-		got := FormatMemoryGB(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatMemoryGB(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, FormatBytes(tt.in))
 	}
 }
 
-func TestFormatBool(t *testing.T) {
-	if FormatBool(true) != "Yes" {
-		t.Error("FormatBool(true) should be 'Yes'")
-	}
-	if FormatBool(false) != "No" {
-		t.Error("FormatBool(false) should be 'No'")
-	}
-}
-
-func TestFormatCostPtr(t *testing.T) {
-	f := 42.5
+func TestFormatCores(t *testing.T) {
 	tests := []struct {
-		input *float64
-		want  string
+		in   float64
+		want string
 	}{
-		{nil, "-"},
-		{&f, "$42.50"},
+		{0, "0.00"},
+		{12.5, "12.50"},
+		{0.5, "0.50"},
+		{-1, "-"},
 	}
 	for _, tt := range tests {
-		got := FormatCostPtr(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatCostPtr(%v) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, FormatCores(tt.in))
 	}
 }
 
-func TestFormatPercentPtr(t *testing.T) {
-	tests := []struct {
-		input *float64
-		want  string
-	}{
-		{nil, "-"},
-		{func() *float64 { v := 42.5; return &v }(), "42.5%"},
-		{func() *float64 { v := 0.0; return &v }(), "0.0%"},
-	}
-	for _, tt := range tests {
-		got := FormatPercentPtr(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatPercentPtr(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFormatOptionalString(t *testing.T) {
-	tests := []struct {
-		input *string
-		want  string
-	}{
-		{nil, "-"},
-		{func() *string { s := "hello"; return &s }(), "hello"},
-		{func() *string { s := ""; return &s }(), ""},
-	}
-	for _, tt := range tests {
-		got := FormatOptionalString(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatOptionalString(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFormatInt(t *testing.T) {
-	tests := []struct {
-		input int
-		want  string
-	}{
-		{0, "0"},
-		{1, "1"},
-		{-1, "-1"},
-		{1000000, "1000000"},
-	}
-	for _, tt := range tests {
-		got := FormatInt(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatInt(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFormatFloat(t *testing.T) {
-	tests := []struct {
-		input    float64
-		decimals int
-		want     string
-	}{
-		{1.0, 1, "1.0"},
-		{3.14159, 2, "3.14"},
-		{0.0, 0, "0"},
-	}
-	for _, tt := range tests {
-		got := FormatFloat(tt.input, tt.decimals)
-		if got != tt.want {
-			t.Errorf("FormatFloat(%v, %d) = %q, want %q", tt.input, tt.decimals, got, tt.want)
-		}
-	}
-}
-
-func TestFormatFloatPtr(t *testing.T) {
-	tests := []struct {
-		input    *float64
-		decimals int
-		want     string
-	}{
-		{nil, 2, "-"},
-		{func() *float64 { v := 3.14; return &v }(), 2, "3.14"},
-	}
-	for _, tt := range tests {
-		got := FormatFloatPtr(tt.input, tt.decimals)
-		if got != tt.want {
-			t.Errorf("FormatFloatPtr(%v, %d) = %q, want %q", tt.input, tt.decimals, got, tt.want)
-		}
-	}
-}
-
-func TestFormatMemoryGBPtr(t *testing.T) {
-	tests := []struct {
-		input *float64
-		want  string
-	}{
-		{nil, "-"},
-		{func() *float64 { v := 1.0; return &v }(), "1.0 GB"},
-		{func() *float64 { v := 0.5; return &v }(), "512 MB"},
-	}
-	for _, tt := range tests {
-		got := FormatMemoryGBPtr(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatMemoryGBPtr(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFormatIntPtr(t *testing.T) {
-	tests := []struct {
-		input *int
-		want  string
-	}{
-		{nil, "-"},
-		{func() *int { v := 5; return &v }(), "5"},
-		{func() *int { v := 0; return &v }(), "0"},
-	}
-	for _, tt := range tests {
-		got := FormatIntPtr(tt.input)
-		if got != tt.want {
-			t.Errorf("FormatIntPtr(%v) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestShortID(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"abc", "abc"},
-		{"12345678", "12345678"},
-		{"123456789", "12345678"},
-		{"abcdef012345", "abcdef01"},
-	}
-	for _, tt := range tests {
-		got := ShortID(tt.input)
-		if got != tt.want {
-			t.Errorf("ShortID(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestRenderNodes(t *testing.T) {
-	nodes := testutil.SampleNodes()
-	// Should not panic with normal data
-	RenderNodes(nodes, len(nodes), true)
-	// Should not panic with noColor=false
-	RenderNodes(nodes, len(nodes), false)
-}
-
-func TestRenderWorkloads(t *testing.T) {
-	workloads := testutil.SampleWorkloads()
-	RenderWorkloads(workloads, len(workloads), true)
-}
-
-func TestRenderRecommendations(t *testing.T) {
-	recs := testutil.SampleRecommendations()
-	RenderRecommendations(recs, len(recs), true)
-}
-
-func TestRenderNamespaces(t *testing.T) {
-	namespaces := testutil.SampleNamespaces()
-	RenderNamespaces(namespaces, len(namespaces), true)
-}
-
-func TestRenderDashboard(t *testing.T) {
-	dashboard := testutil.SampleDashboard()
-	RenderDashboard(dashboard, true)
-}
-
-func TestRender_EmptyData(t *testing.T) {
-	// All render functions should handle empty slices without panic
-	RenderClusters([]types.ClusterResponse{}, 0, true)
-	RenderNodes([]types.NodeResponse{}, 0, true)
-	RenderWorkloads([]types.WorkloadResponse{}, 0, true)
-	RenderRecommendations([]types.RecommendationResponse{}, 0, true)
-	RenderNamespaces([]types.NamespaceResponse{}, 0, true)
-	RenderTeamCosts([]types.TeamCostResponse{}, 0, true)
-	RenderDepartmentCosts([]types.DepartmentCostResponse{}, 0, true)
-	RenderNodeGroups([]types.NodeGroupResponse{}, 0, true)
-	RenderPersistentVolumes([]types.PersistentVolumeResponse{}, 0, true)
+func TestRenderEmpty_Smoke(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, RenderWorkloads(&buf, nil, nil))
+	require.NoError(t, RenderPods(&buf, nil, nil))
+	require.NoError(t, RenderNodes(&buf, nil, nil))
+	require.NoError(t, RenderNodeGroups(&buf, nil, nil))
+	require.NoError(t, RenderNamespaces(&buf, nil, nil))
+	require.NoError(t, RenderRecommendations(&buf, nil, nil))
+	require.NoError(t, RenderTeams(&buf, nil, nil))
+	require.NoError(t, RenderTeamAssignments(&buf, nil, nil))
+	require.NoError(t, RenderDepartments(&buf, nil, nil))
 }

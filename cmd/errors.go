@@ -29,8 +29,7 @@ func friendlyError(err error) string {
 	}
 
 	// API errors — use the status code helpers
-	var apiErr *api.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*api.APIError](err); ok {
 		switch {
 		case apiErr.IsAuthError():
 			return "Authentication failed: API key is invalid or expired.\n  Run 'kubeadapt auth login' to re-authenticate."
@@ -48,13 +47,11 @@ func friendlyError(err error) string {
 	}
 
 	// Network errors
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
+	if dnsErr, ok := errors.AsType[*net.DNSError](err); ok {
 		return fmt.Sprintf("Cannot resolve %s: check your network connection and --api-url flag.", dnsErr.Name)
 	}
 
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if opErr, ok := errors.AsType[*net.OpError](err); ok {
 		if opErr.Op == "dial" {
 			return "Cannot connect to Kubeadapt API: connection refused.\n  Check your network connection or use --api-url to set a different endpoint."
 		}

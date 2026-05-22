@@ -2,32 +2,48 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
 
 var getClusterCmd = &cobra.Command{
-	Use:   "cluster [id]",
-	Short: "Show details of a specific cluster",
+	Use:   "cluster <cluster-id>",
+	Short: "Show a cluster",
+	Long:  `Show details for a single cluster by UUID.`,
 	Args:  cobra.ExactArgs(1),
-	Example: `  kubeadapt get cluster abc123
-  kubeadapt get cluster abc123 -o json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := newAPIClientFromCmd(cmd)
+		if cmd.Flags().Changed("cost-mode") {
+			return fmt.Errorf("--cost-mode is not accepted by the cluster endpoint")
+		}
+		rctx := getRunContext(cmd)
+		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-		resp, err := fetchWithSpinner(cmd.Context(), "Fetching cluster details...", func(ctx context.Context) (*types.ClusterResponse, error) {
-			return client.GetCluster(ctx, args[0])
-		})
+
+		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+		defer cancel()
+
+		cluster, _, err := c.GetCluster(ctx, args[0])
 		if err != nil {
-			return err
+			return fmt.Errorf("get cluster %s: %w", args[0], err)
 		}
-		return renderOutputFromCmd(cmd, resp, func() {
-			output.RenderCluster(resp, isNoColor(cmd))
-		})
+
+		outFmt := formatTable
+		if rctx != nil {
+			outFmt = rctx.OutputFmt
+		}
+		switch outFmt {
+		case formatJSON:
+			return output.RenderJSON(cmd.OutOrStdout(), cluster)
+		case formatYAML:
+			return output.RenderYAML(cmd.OutOrStdout(), cluster)
+		default:
+			return output.RenderCluster(cmd.OutOrStdout(), *cluster)
+		}
 	},
 }
 

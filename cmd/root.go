@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -36,7 +37,7 @@ var rootCmd = &cobra.Command{
 for Kubernetes cost optimization, resource management, and recommendations.
 
 Environment variables:
-  KUBEADAPT_API_URL   Override the API endpoint (default: https://public-api.kubeadapt.io)
+  KUBEADAPT_API_URL   Override the API endpoint (default: https://api.kubeadapt.io)
   KUBEADAPT_API_KEY   Provide the API key (overrides config file)
 
 Configuration is stored in ~/.kubeadapt/config.yaml (or $XDG_CONFIG_HOME/kubeadapt/config.yaml).
@@ -48,26 +49,14 @@ Use 'kubeadapt auth login' to authenticate.`,
 			return nil
 		}
 
-		var cfg *config.Config
-		var err error
-		cfg, err = config.Load(cfgFile)
+		cfg, err := config.Load(cfgFile)
 		if err != nil {
 			cfg = config.Default()
 		}
 
-		if envURL := os.Getenv("KUBEADAPT_API_URL"); envURL != "" {
-			cfg.APIURL = envURL
-		}
-		if envKey := os.Getenv("KUBEADAPT_API_KEY"); envKey != "" {
-			cfg.APIKey = envKey
-		}
-
-		if apiURL != "" {
-			cfg.APIURL = apiURL
-		}
-		if apiKey != "" {
-			cfg.APIKey = apiKey
-		}
+		// Resolution order (first non-empty wins): CLI flag > env var > config file.
+		cfg.APIURL = cmp.Or(apiURL, os.Getenv("KUBEADAPT_API_URL"), cfg.APIURL)
+		cfg.APIKey = cmp.Or(apiKey, os.Getenv("KUBEADAPT_API_KEY"), cfg.APIKey)
 
 		log, logErr := logger.New(verbose)
 		if logErr != nil {
@@ -107,8 +96,7 @@ func Execute() {
 	}
 
 	// FlagError → show usage + exit 2
-	var flagErr *FlagError
-	if errors.As(err, &flagErr) {
+	if flagErr, ok := errors.AsType[*FlagError](err); ok {
 		fmt.Fprintf(os.Stderr, "Error: %s\n\n", flagErr.Err)
 		// Don't print usage for the root command (too verbose), only for subcommands
 		os.Exit(2)
@@ -128,6 +116,8 @@ func init() {
 		&cobra.Group{ID: groupAuth, Title: "Authentication:"},
 		&cobra.Group{ID: groupUtility, Title: "Utility:"},
 	)
+
+	rootCmd.AddCommand(newHealthCmd())
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.kubeadapt/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "Kubeadapt API URL")

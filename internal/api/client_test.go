@@ -1,821 +1,483 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
-	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestGetOverview(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
+type widget struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
 
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetOverview(context.Background())
-	if err != nil {
-		t.Fatalf("GetOverview() error: %v", err)
-	}
-	if resp.ClusterCount != 3 {
-		t.Errorf("expected 3 clusters, got %d", resp.ClusterCount)
-	}
-	if resp.TotalNodes != 15 {
-		t.Errorf("expected 15 nodes, got %d", resp.TotalNodes)
-	}
-	if resp.MTDActualCost == nil {
-		t.Error("expected MTDActualCost to be non-nil")
-	}
-	if resp.RunRate == nil {
-		t.Error("expected RunRate to be non-nil")
-	}
-	if resp.EfficiencyScore == nil {
-		t.Error("expected EfficiencyScore to be non-nil")
+func writeJSON(t *testing.T, w http.ResponseWriter, status int, body any) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	err := json.NewEncoder(w).Encode(body)
+	require.NoError(t, err, "encode response")
+}
+
+func successEnvelope(data widget) types.Envelope[widget] {
+	return types.Envelope[widget]{
+		Data: data,
+		Meta: types.Meta{
+			RequestID: "req-abc-123",
+			AppliedAt: "2026-01-01T00:00:00Z",
+		},
 	}
 }
 
-func TestGetClusters(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetClusters(context.Background())
-	if err != nil {
-		t.Fatalf("GetClusters() error: %v", err)
-	}
-	if len(resp.Clusters) != 2 {
-		t.Errorf("expected 2 clusters, got %d", len(resp.Clusters))
-	}
-	if resp.Clusters[0].Name != "production-us" {
-		t.Errorf("expected first cluster name 'production-us', got %q", resp.Clusters[0].Name)
-	}
-	if resp.Clusters[0].EfficiencyScore == nil {
-		t.Error("expected EfficiencyScore to be non-nil")
-	}
-	if resp.Clusters[0].MonthlyCost == nil {
-		t.Error("expected MonthlyCost to be non-nil")
-	}
-}
-
-func TestGetCluster(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetCluster(context.Background(), "cls-001")
-	if err != nil {
-		t.Fatalf("GetCluster() error: %v", err)
-	}
-	if resp.ID != "cls-001" {
-		t.Errorf("expected ID 'cls-001', got %q", resp.ID)
-	}
-}
-
-func TestUnauthorized(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "") // no key
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error for unauthorized request")
-	}
-	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if !apiErr.IsAuthError() {
-		t.Errorf("expected auth error, got status %d", apiErr.StatusCode)
-	}
-}
-
-func TestGetNodes(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNodes(context.Background(), "", "", 0, 0)
-	if err != nil {
-		t.Fatalf("GetNodes() error: %v", err)
-	}
-	if len(resp.Nodes) != 2 {
-		t.Errorf("expected 2 nodes, got %d", len(resp.Nodes))
-	}
-	if resp.Nodes[0].NodeName != "ip-10-0-1-42.ec2.internal" {
-		t.Errorf("expected first node name 'ip-10-0-1-42.ec2.internal', got %q", resp.Nodes[0].NodeName)
-	}
-	if resp.Nodes[0].PodCount == nil {
-		t.Error("expected PodCount to be non-nil")
-	}
-	if resp.Nodes[0].MonthlyCost == nil {
-		t.Error("expected MonthlyCost to be non-nil")
-	}
-}
-
-func TestGetWorkloads(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetWorkloads(context.Background(), "", "", "", 0, 0)
-	if err != nil {
-		t.Fatalf("GetWorkloads() error: %v", err)
-	}
-	if len(resp.Workloads) != 2 {
-		t.Errorf("expected 2 workloads, got %d", len(resp.Workloads))
-	}
-	if resp.Workloads[0].WorkloadName != "api-gateway" {
-		t.Errorf("expected first workload name 'api-gateway', got %q", resp.Workloads[0].WorkloadName)
-	}
-	if resp.Workloads[0].EfficiencyScore == nil {
-		t.Error("expected EfficiencyScore to be non-nil")
-	}
-	if resp.Workloads[0].MonthlyCost == nil {
-		t.Error("expected MonthlyCost to be non-nil")
-	}
-}
-
-func TestGetNamespaces(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNamespaces(context.Background(), "", "", "")
-	if err != nil {
-		t.Fatalf("GetNamespaces() error: %v", err)
-	}
-	if len(resp.Namespaces) != 2 {
-		t.Errorf("expected 2 namespaces, got %d", len(resp.Namespaces))
-	}
-	if resp.Namespaces[0].Name != "default" {
-		t.Errorf("expected first namespace name 'default', got %q", resp.Namespaces[0].Name)
-	}
-	if resp.Namespaces[0].EfficiencyScore == nil {
-		t.Error("expected EfficiencyScore to be non-nil")
-	}
-	if resp.Namespaces[0].MonthlyCost == nil {
-		t.Error("expected MonthlyCost to be non-nil")
-	}
-	if resp.Namespaces[0].ContainerCount == nil {
-		t.Error("expected ContainerCount to be non-nil")
-	}
-}
-
-func TestGetRecommendations(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetRecommendations(context.Background(), "", "", "", 0, 0)
-	if err != nil {
-		t.Fatalf("GetRecommendations() error: %v", err)
-	}
-	if len(resp.Recommendations) != 2 {
-		t.Errorf("expected 2 recommendations, got %d", len(resp.Recommendations))
-	}
-	if resp.Recommendations[0].Priority == nil {
-		t.Error("expected Priority to be non-nil")
-	}
-}
-
-func TestGetDashboard(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetDashboard(context.Background())
-	if err != nil {
-		t.Fatalf("GetDashboard() error: %v", err)
-	}
-	if resp.ClusterCount != 3 {
-		t.Errorf("expected 3 clusters, got %d", resp.ClusterCount)
-	}
-	if resp.TotalMonthlyCost != 9125.00 {
-		t.Errorf("expected monthly cost 9125.00, got %f", resp.TotalMonthlyCost)
-	}
-	if len(resp.TopClusters) != 2 {
-		t.Errorf("expected 2 top clusters, got %d", len(resp.TopClusters))
-	}
-	if resp.EfficiencyScore == nil {
-		t.Error("expected EfficiencyScore to be non-nil")
-	}
-}
-
-func TestGetClusterDashboard(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetClusterDashboard(context.Background(), "cls-001")
-	if err != nil {
-		t.Fatalf("GetClusterDashboard() error: %v", err)
-	}
-	if resp.ClusterID != "cls-001" {
-		t.Errorf("expected cluster ID 'cls-001', got %q", resp.ClusterID)
-	}
-	if resp.CostBreakdown == nil {
-		t.Error("expected CostBreakdown to be non-nil")
-	}
-	if resp.MTDActualCost == nil {
-		t.Error("expected MTDActualCost to be non-nil")
-	}
-	if len(resp.RecommendationSummary) == 0 {
-		t.Error("expected RecommendationSummary to be non-empty")
-	}
-}
-
-func TestGetCluster404(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetCluster(context.Background(), "nonexistent")
-	if err == nil {
-		t.Fatal("expected error for nonexistent cluster")
-	}
-	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if !apiErr.IsNotFound() {
-		t.Errorf("expected not found error, got status %d", apiErr.StatusCode)
-	}
-}
-
-func TestClient_Forbidden(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "forbidden"})
+func TestDoEnvelopeGet_HappyPath(t *testing.T) {
+	want := widget{ID: "w-1", Name: "alpha"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/widgets/w-1", r.URL.Path)
+		writeJSON(t, w, http.StatusOK, successEnvelope(want))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	got, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets/w-1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	require.NotNil(t, meta)
+	assert.Equal(t, "req-abc-123", meta.RequestID)
+}
+
+func TestDoEnvelopeGet_EnvelopeError_422(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusUnprocessableEntity, types.Envelope[widget]{
+			Error: &types.APIErrorBody{
+				Code:    string(CodeInvalidCostMode),
+				Message: "this endpoint does not accept cost_mode",
+				Details: []map[string]any{{"field": "cost_mode"}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.Error(t, err)
+	assert.True(t, IsInvalidCostMode(err), "expected IsInvalidCostMode, got: %v", err)
 	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if !apiErr.IsForbidden() {
-		t.Errorf("expected IsForbidden(), status=%d", apiErr.StatusCode)
-	}
+	require.True(t, ok, "expected *APIError, got %T", err)
+	assert.Equal(t, http.StatusUnprocessableEntity, apiErr.StatusCode)
+	assert.Equal(t, CodeInvalidCostMode, apiErr.Code)
+	assert.NotEmpty(t, apiErr.Details, "expected details to be populated")
 }
 
-func TestClient_RateLimited(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
-		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "rate limited"})
+func TestDoEnvelopeGet_RateLimited429_NoRetry(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "60")
+		writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
+			Error: &types.APIErrorBody{
+				Code:    string(CodeRateLimited),
+				Message: "slow down",
+			},
+		})
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if !apiErr.IsRateLimited() {
-		t.Errorf("expected IsRateLimited(), status=%d", apiErr.StatusCode)
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.Error(t, err)
+	assert.True(t, IsRateLimited(err), "expected IsRateLimited, got: %v", err)
+	apiErr, _ := errors.AsType[*APIError](err)
+	assert.Equal(t, 60*time.Second, apiErr.RetryAfter)
+	assert.Equal(t, int32(1), calls.Load())
 }
 
-func TestClient_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"detail": "internal server error"})
+func TestDoEnvelopeGet_RateLimited429_WithRetry(t *testing.T) {
+	var calls atomic.Int32
+	want := widget{ID: "w-2", Name: "beta"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		if n == 1 {
+			w.Header().Set("Retry-After", "1")
+			writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
+				Error: &types.APIErrorBody{
+					Code:    string(CodeRateLimited),
+					Message: "slow down",
+				},
+			})
+			return
+		}
+		writeJSON(t, w, http.StatusOK, successEnvelope(want))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if !apiErr.IsServerError() {
-		t.Errorf("expected IsServerError(), status=%d", apiErr.StatusCode)
-	}
+	defer srv.Close()
+
+	var slept []time.Duration
+	c := NewClient(srv.URL, "key",
+		WithRetryOnRateLimit(true),
+		WithMaxRetries(1),
+		withSleeper(func(d time.Duration) { slept = append(slept, d) }),
+	)
+	got, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	assert.NotNil(t, meta, "expected non-nil meta")
+	assert.Equal(t, int32(2), calls.Load())
+	require.Len(t, slept, 1)
+	assert.Equal(t, time.Second, slept[0])
 }
 
-func TestClient_MalformedJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{invalid json`))
+func TestDoEnvelopeGet_RateLimited429_RetryGivesUp(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "1")
+		writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
+			Error: &types.APIErrorBody{
+				Code:    string(CodeRateLimited),
+				Message: "slow down",
+			},
+		})
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error for malformed JSON response")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key",
+		WithRetryOnRateLimit(true),
+		WithMaxRetries(1),
+		withSleeper(func(time.Duration) {}),
+	)
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	assert.True(t, IsRateLimited(err), "expected IsRateLimited, got: %v", err)
+	assert.Equal(t, int32(2), calls.Load(), "expected 2 calls (initial + 1 retry)")
 }
 
-func TestClient_NetworkError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+func TestDoEnvelopeGet_RateLimitUnavailable503(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		writeJSON(t, w, http.StatusServiceUnavailable, types.Envelope[widget]{
+			Error: &types.APIErrorBody{
+				Code:    string(CodeRateLimitUnavailable),
+				Message: "rate limiter unavailable",
+			},
+		})
 	}))
-	server.Close() // close before making the request
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error for network failure")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key",
+		WithRetryOnRateLimit(true),
+		WithMaxRetries(3),
+		withSleeper(func(time.Duration) {}),
+	)
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	assert.True(t, IsRateLimitUnavailable(err), "expected IsRateLimitUnavailable, got: %v", err)
+	assert.Equal(t, int32(1), calls.Load(), "503 must NOT trigger retry")
+}
+
+func TestDoEnvelopeGet_TransportError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		require.True(t, ok, "server does not support hijacking")
+		conn, _, err := hj.Hijack()
+		require.NoError(t, err, "hijack")
+		_ = conn.Close()
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.Error(t, err, "expected transport error")
 	_, ok := errors.AsType[*APIError](err)
-	if ok {
-		t.Errorf("expected non-*APIError for network error, got *APIError")
-	}
+	assert.False(t, ok, "transport error should not be *APIError, got %T: %v", err, err)
 }
 
-func TestClient_ContextCancelled(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestDoEnvelopeGet_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not-json"))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := client.GetOverview(ctx)
-	if err == nil {
-		t.Fatal("expected error for canceled context")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.Error(t, err, "expected decode error")
+	assert.Contains(t, err.Error(), "decoding response")
 }
 
-func TestClient_NonJSONErrorBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestDoEnvelopeGet_CursorParamsForwarded(t *testing.T) {
+	var seen url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.URL.Query()
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	params := appendCursorParams(nil, "abc123", 50, true)
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", params)
+	require.NoError(t, err)
+	assert.Equal(t, "abc123", seen.Get("cursor"))
+	assert.Equal(t, "50", seen.Get("limit"))
+	assert.Equal(t, "true", seen.Get("include_total"))
+}
+
+func TestDoEnvelopeGet_AuthorizationHeader(t *testing.T) {
+	var seenAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenAuth = r.Header.Get("Authorization")
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "secret-key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer secret-key", seenAuth)
+}
+
+func TestDoEnvelopeGet_RateLimitHeadersCaptured(t *testing.T) {
+	resetAt := time.Now().Add(2 * time.Minute).Unix()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "100")
+		w.Header().Set("X-RateLimit-Remaining", "73")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt, 10))
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	rl := c.RateLimit()
+	assert.Equal(t, 100, rl.Limit)
+	assert.Equal(t, 73, rl.Remaining)
+	assert.Equal(t, resetAt, rl.Reset.Unix())
+}
+
+func TestDoEnvelopeGet_RequestIDLogged(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "rid-server-issued-42")
+		writeJSON(t, w, http.StatusOK, types.Envelope[widget]{
+			Data: widget{ID: "x"},
+			Meta: types.Meta{RequestID: "rid-server-issued-42"},
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "rid-server-issued-42", meta.RequestID)
+}
+
+func TestDoEnvelopeGet_Non2xxWithoutEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server fault"))
+		_, _ = w.Write([]byte("upstream is on fire"))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
 	apiErr, ok := errors.AsType[*APIError](err)
-	if !ok {
-		t.Fatalf("expected *APIError, got %T", err)
-	}
-	if apiErr.Message != "server fault" {
-		t.Errorf("expected Message 'server fault', got %q", apiErr.Message)
-	}
+	require.True(t, ok, "expected *APIError, got %T: %v", err, err)
+	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Message, "upstream is on fire")
 }
 
-func TestClient_204NoContent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-		// No body written
-	}))
-	defer server.Close()
+func TestPickScopedOrFlat(t *testing.T) {
+	scoped := func(id string) string { return "/v1/clusters/" + id + "/workloads" }
+	flat := "/v1/workloads"
 
-	client := NewClient(server.URL, "test-key")
-	// get() is unexported but accessible in package api tests
-	var resp types.OverviewResponse
-	err := client.get(context.Background(), "/v1/overview", nil, &resp)
-	if err != nil {
-		t.Fatalf("expected no error for 204 response, got: %v", err)
+	tests := []struct {
+		name      string
+		clusterID []string
+		wantPath  string
+		wantCSV   string
+	}{
+		{"single cluster -> scoped", []string{"cls-1"}, "/v1/clusters/cls-1/workloads", ""},
+		{"empty list -> flat", nil, flat, ""},
+		{"empty strings only -> flat", []string{"", ""}, flat, ""},
+		{"multiple -> flat with csv", []string{"cls-1", "cls-2"}, flat, "cls-1,cls-2"},
+		{"single with empties trimmed -> scoped", []string{"", "cls-1", ""}, "/v1/clusters/cls-1/workloads", ""},
+		{"three -> flat csv", []string{"a", "b", "c"}, flat, "a,b,c"},
 	}
-	// resp should be zero-valued (not populated)
-	if resp.ClusterCount != 0 {
-		t.Errorf("expected zero ClusterCount for 204 response, got %d", resp.ClusterCount)
-	}
-}
-
-func TestClient_WithTimeout(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key", WithTimeout(1*time.Millisecond))
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected timeout error")
-	}
-}
-
-func TestClient_WithLogger(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-	client := NewClient(server.URL, "test-key", WithLogger(zap.NewNop()))
-	_, err := client.GetOverview(context.Background())
-	if err != nil {
-		t.Fatalf("WithLogger client error: %v", err)
-	}
-}
-
-func TestClient_WithHTTPClient(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-	customHTTPClient := &http.Client{Timeout: 5 * time.Second}
-	client := NewClient(server.URL, "test-key", WithHTTPClient(customHTTPClient))
-	_, err := client.GetOverview(context.Background())
-	if err != nil {
-		t.Fatalf("WithHTTPClient client error: %v", err)
-	}
-}
-
-func TestClient_EmptyResponseBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		// write nothing
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetOverview(context.Background())
-	if err == nil {
-		t.Fatal("expected error for empty response body")
-	}
-}
-
-func TestGetCostsTeams(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetCostsTeams(context.Background(), "")
-	if err != nil {
-		t.Fatalf("GetCostsTeams() error: %v", err)
-	}
-	if len(resp.Teams) != 2 {
-		t.Errorf("expected 2 teams, got %d", len(resp.Teams))
-	}
-	if resp.Teams[0].Team != "platform" {
-		t.Errorf("expected first team 'platform', got %q", resp.Teams[0].Team)
-	}
-	if resp.Total != 2 {
-		t.Errorf("expected total 2, got %d", resp.Total)
-	}
-	if resp.Summary.TotalHourlyCost == 0 {
-		t.Error("expected non-zero TotalHourlyCost in summary")
-	}
-	if resp.Summary.TotalMonthlyCost == 0 {
-		t.Error("expected non-zero TotalMonthlyCost in summary")
-	}
-}
-
-func TestGetPersistentVolumes(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetPersistentVolumes(context.Background(), "", "", "")
-	if err != nil {
-		t.Fatalf("GetPersistentVolumes() error: %v", err)
-	}
-	if len(resp.PersistentVolumes) != 2 {
-		t.Errorf("expected 2 persistent volumes, got %d", len(resp.PersistentVolumes))
-	}
-	if resp.PersistentVolumes[0].Name != "pvc-prometheus-data" {
-		t.Errorf("expected first PV 'pvc-prometheus-data', got %q", resp.PersistentVolumes[0].Name)
-	}
-	if resp.Total != 2 {
-		t.Errorf("expected total 2, got %d", resp.Total)
-	}
-	if resp.Summary.TotalCapacityGB == 0 {
-		t.Error("expected non-zero TotalCapacityGB in summary")
-	}
-	if resp.Summary.TotalHourlyCost == 0 {
-		t.Error("expected non-zero TotalHourlyCost in summary")
-	}
-}
-
-func TestGetNodeGroups(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNodeGroups(context.Background(), "")
-	if err != nil {
-		t.Fatalf("GetNodeGroups() error: %v", err)
-	}
-	if len(resp.NodeGroups) != 2 {
-		t.Errorf("expected 2 node groups, got %d", len(resp.NodeGroups))
-	}
-	if resp.NodeGroups[0].Name != "general-purpose" {
-		t.Errorf("expected first node group 'general-purpose', got %q", resp.NodeGroups[0].Name)
-	}
-	if resp.Total != 2 {
-		t.Errorf("expected total 2, got %d", resp.Total)
-	}
-	if resp.NodeGroups[0].HourlyCost == nil {
-		t.Error("expected HourlyCost to be non-nil")
-	}
-	if resp.NodeGroups[0].TotalCPUCores == nil {
-		t.Error("expected TotalCPUCores to be non-nil")
-	}
-}
-
-func TestGetWorkloads_WithFilters(t *testing.T) {
-	var capturedParams url.Values
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if auth == "" || auth == "Bearer " {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		capturedParams = r.URL.Query()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"workloads": []any{},
-			"total":     0,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, csv := pickScopedOrFlat(scoped, flat, tt.clusterID)
+			assert.Equal(t, tt.wantPath, path, "path")
+			assert.Equal(t, tt.wantCSV, csv, "csv")
 		})
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetWorkloads(context.Background(), "cls-001", "default", "Deployment", 10, 5)
-	if err != nil {
-		t.Fatalf("GetWorkloads() error: %v", err)
-	}
-
-	if capturedParams.Get("cluster_id") != "cls-001" {
-		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
-	}
-	if capturedParams.Get("namespace") != "default" {
-		t.Errorf("expected namespace=default, got %q", capturedParams.Get("namespace"))
-	}
-	if capturedParams.Get("kind") != "Deployment" {
-		t.Errorf("expected kind=Deployment, got %q", capturedParams.Get("kind"))
-	}
-	if capturedParams.Get("limit") != "10" {
-		t.Errorf("expected limit=10, got %q", capturedParams.Get("limit"))
-	}
-	if capturedParams.Get("offset") != "5" {
-		t.Errorf("expected offset=5, got %q", capturedParams.Get("offset"))
 	}
 }
 
-func TestGetWorkloads_NoFilters(t *testing.T) {
-	var capturedURL string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedURL = r.URL.String()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"workloads": []any{}, "total": 0})
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetWorkloads(context.Background(), "", "", "", 0, 0)
-	if err != nil {
-		t.Fatalf("GetWorkloads() error: %v", err)
+func TestAppendCursorParams(t *testing.T) {
+	tests := []struct {
+		name         string
+		seed         url.Values
+		cursor       string
+		limit        int
+		includeTotal bool
+		assertions   func(t *testing.T, p url.Values)
+	}{
+		{
+			name: "nil params allocated",
+			assertions: func(t *testing.T, p url.Values) {
+				require.NotNil(t, p, "expected non-nil params")
+				assert.Empty(t, p)
+			},
+		},
+		{
+			name:   "cursor set when non-empty",
+			cursor: "abc",
+			assertions: func(t *testing.T, p url.Values) {
+				assert.Equal(t, "abc", p.Get("cursor"))
+			},
+		},
+		{
+			name:   "cursor omitted when empty",
+			cursor: "",
+			assertions: func(t *testing.T, p url.Values) {
+				assert.NotContains(t, p, "cursor", "cursor should be absent")
+			},
+		},
+		{
+			name:  "limit zero omitted",
+			limit: 0,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.NotContains(t, p, "limit", "limit should be absent when 0")
+			},
+		},
+		{
+			name:  "limit positive set",
+			limit: 25,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.Equal(t, "25", p.Get("limit"))
+			},
+		},
+		{
+			name:  "limit negative omitted",
+			limit: -5,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.NotContains(t, p, "limit", "limit should be absent when negative")
+			},
+		},
+		{
+			name:         "include_total true",
+			includeTotal: true,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.Equal(t, "true", p.Get("include_total"))
+			},
+		},
+		{
+			name:         "include_total false omitted",
+			includeTotal: false,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.NotContains(t, p, "include_total", "include_total should be absent when false")
+			},
+		},
+		{
+			name:         "existing params preserved",
+			seed:         url.Values{"existing": []string{"keep"}},
+			cursor:       "c1",
+			limit:        10,
+			includeTotal: true,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.Equal(t, "keep", p.Get("existing"), "existing param dropped")
+				assert.Equal(t, "c1", p.Get("cursor"))
+				assert.Equal(t, "10", p.Get("limit"))
+				assert.Equal(t, "true", p.Get("include_total"))
+			},
+		},
 	}
-	if strings.Contains(capturedURL, "?") {
-		t.Errorf("expected no query params, got URL: %s", capturedURL)
-	}
-}
-
-func TestGetNodes_WithFilters(t *testing.T) {
-	var capturedParams url.Values
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedParams = r.URL.Query()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"nodes": []any{}, "total": 0})
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetNodes(context.Background(), "cls-001", "general-purpose", 20, 0)
-	if err != nil {
-		t.Fatalf("GetNodes() error: %v", err)
-	}
-	if capturedParams.Get("cluster_id") != "cls-001" {
-		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
-	}
-	if capturedParams.Get("node_group") != "general-purpose" {
-		t.Errorf("expected node_group=general-purpose, got %q", capturedParams.Get("node_group"))
-	}
-	if capturedParams.Get("limit") != "20" {
-		t.Errorf("expected limit=20, got %q", capturedParams.Get("limit"))
-	}
-	// offset=0 should NOT be in query params
-	if capturedParams.Has("offset") {
-		t.Errorf("expected offset to be absent (zero value), but got %q", capturedParams.Get("offset"))
-	}
-}
-
-func TestGetRecommendations_WithFilters(t *testing.T) {
-	var capturedParams url.Values
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if auth == "" || auth == "Bearer " {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		capturedParams = r.URL.Query()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"recommendations": []any{},
-			"total":           0,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := appendCursorParams(tt.seed, tt.cursor, tt.limit, tt.includeTotal)
+			tt.assertions(t, got)
 		})
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetRecommendations(context.Background(), "cls-001", "rightsize", "open", 5, 10)
-	if err != nil {
-		t.Fatalf("GetRecommendations() error: %v", err)
-	}
-
-	if capturedParams.Get("cluster_id") != "cls-001" {
-		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
-	}
-	if capturedParams.Get("recommendation_type") != "rightsize" {
-		t.Errorf("expected recommendation_type=rightsize, got %q", capturedParams.Get("recommendation_type"))
-	}
-	if capturedParams.Get("status") != "open" {
-		t.Errorf("expected status=open, got %q", capturedParams.Get("status"))
-	}
-	if capturedParams.Get("limit") != "5" {
-		t.Errorf("expected limit=5, got %q", capturedParams.Get("limit"))
-	}
-	if capturedParams.Get("offset") != "10" {
-		t.Errorf("expected offset=10, got %q", capturedParams.Get("offset"))
 	}
 }
 
-func TestGetNamespaces_WithFilters(t *testing.T) {
-	var capturedParams url.Values
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if auth == "" || auth == "Bearer " {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		capturedParams = r.URL.Query()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"namespaces": []any{},
-			"total":      0,
+func TestValidateNoCostMode(t *testing.T) {
+	t.Run("absent params -> ok", func(t *testing.T) {
+		assert.NoError(t, validateNoCostMode(nil, "/v1/clusters"))
+		assert.NoError(t, validateNoCostMode(url.Values{}, "/v1/nodes"))
+	})
+	t.Run("other params ignored", func(t *testing.T) {
+		p := url.Values{"limit": []string{"10"}, "cursor": []string{"x"}}
+		assert.NoError(t, validateNoCostMode(p, "/v1/node-groups"))
+	})
+	endpointCases := []string{
+		"/v1/clusters",
+		"/v1/nodes",
+		"/v1/recommendations",
+		"/v1/organization",
+	}
+	for _, endpoint := range endpointCases {
+		t.Run("cost_mode rejected on "+endpoint, func(t *testing.T) {
+			p := url.Values{"cost_mode": []string{"fully_loaded"}}
+			err := validateNoCostMode(p, endpoint)
+			require.True(t, IsInvalidCostMode(err), "expected IsInvalidCostMode, got %v", err)
+			apiErr, _ := errors.AsType[*APIError](err)
+			assert.Equal(t, http.StatusUnprocessableEntity, apiErr.StatusCode)
+			assert.Contains(t, apiErr.Message, endpoint)
 		})
-	}))
-	defer server.Close()
-
-	client := NewClient(server.URL, "test-key")
-	_, err := client.GetNamespaces(context.Background(), "cls-001", "platform", "engineering")
-	if err != nil {
-		t.Fatalf("GetNamespaces() error: %v", err)
-	}
-
-	if capturedParams.Get("cluster_id") != "cls-001" {
-		t.Errorf("expected cluster_id=cls-001, got %q", capturedParams.Get("cluster_id"))
-	}
-	if capturedParams.Get("team") != "platform" {
-		t.Errorf("expected team=platform, got %q", capturedParams.Get("team"))
-	}
-	if capturedParams.Get("department") != "engineering" {
-		t.Errorf("expected department=engineering, got %q", capturedParams.Get("department"))
 	}
 }
 
-func TestGetCostsDepartments(t *testing.T) {
-	server := testutil.NewMockServer()
-	defer server.Close()
+func TestRateLimitSnapshot_MalformedHeadersZeroed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "not-a-number")
+		w.Header().Set("X-RateLimit-Remaining", "")
+		w.Header().Set("X-RateLimit-Reset", "garbage")
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
+	}))
+	defer srv.Close()
 
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetCostsDepartments(context.Background(), "")
-	if err != nil {
-		t.Fatalf("GetCostsDepartments() error: %v", err)
-	}
-	if len(resp.Departments) != 2 {
-		t.Errorf("expected 2 departments, got %d", len(resp.Departments))
-	}
-	if resp.Departments[0].Department != "engineering" {
-		t.Errorf("expected first department 'engineering', got %q", resp.Departments[0].Department)
-	}
-	if resp.Total != 2 {
-		t.Errorf("expected total 2, got %d", resp.Total)
-	}
-	if resp.Summary.TotalHourlyCost == 0 {
-		t.Error("expected non-zero TotalHourlyCost in summary")
-	}
-	if resp.Summary.TotalMonthlyCost == 0 {
-		t.Error("expected non-zero TotalMonthlyCost in summary")
-	}
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	rl := c.RateLimit()
+	assert.Zero(t, rl.Limit)
+	assert.Zero(t, rl.Remaining)
+	assert.True(t, rl.Reset.IsZero(), "expected zeroed Reset, got %v", rl.Reset)
 }
 
-func TestGetClusterCostDistribution(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"data_points": []any{}, "cluster_id": "cls-001"})
+func TestRateLimitSnapshot_HTTPDateReset(t *testing.T) {
+	resetTime := time.Now().Add(90 * time.Second).UTC().Truncate(time.Second)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Reset", resetTime.Format(http.TimeFormat))
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetClusterCostDistribution(context.Background(), "cls-001", "30d")
-	if err != nil {
-		t.Fatalf("GetClusterCostDistribution() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	got := c.RateLimit().Reset
+	assert.True(t, got.Equal(resetTime), "expected reset %s, got %s", resetTime, got)
 }
 
-func TestGetNodeMetrics(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"metrics": []any{}})
+func TestDoEnvelopeGet_UserAgent(t *testing.T) {
+	var ua string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
 	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNodeMetrics(context.Background(), "node-001", "cls-001", "7d")
-	if err != nil {
-		t.Fatalf("GetNodeMetrics() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
-}
+	defer srv.Close()
 
-func TestGetWorkloadMetrics(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"metrics": []any{}})
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetWorkloadMetrics(context.Background(), "wl-001", "cls-001", "7d")
-	if err != nil {
-		t.Fatalf("GetWorkloadMetrics() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
-}
-
-func TestGetWorkloadNodes(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"nodes": []any{}})
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetWorkloadNodes(context.Background(), "wl-001", "cls-001")
-	if err != nil {
-		t.Fatalf("GetWorkloadNodes() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
-}
-
-func TestGetNamespaceDetails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"name": "default"})
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNamespaceDetails(context.Background(), "default", "cls-001")
-	if err != nil {
-		t.Fatalf("GetNamespaceDetails() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
-}
-
-func TestGetNamespaceTrends(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"trends": []any{}})
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNamespaceTrends(context.Background(), "default", "cls-001", "30d")
-	if err != nil {
-		t.Fatalf("GetNamespaceTrends() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
-}
-
-func TestGetNodeGroupDetails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"name": "general"})
-	}))
-	defer server.Close()
-	client := NewClient(server.URL, "test-key")
-	resp, err := client.GetNodeGroupDetails(context.Background(), "general", "cls-001")
-	if err != nil {
-		t.Fatalf("GetNodeGroupDetails() error: %v", err)
-	}
-	if resp == nil {
-		t.Fatal("expected non-nil response")
-	}
+	c := NewClient(srv.URL, "key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(ua, "kubeadapt-cli/"), "expected User-Agent to start with 'kubeadapt-cli/', got %q", ua)
 }
