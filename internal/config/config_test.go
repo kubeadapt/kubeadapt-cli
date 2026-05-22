@@ -3,18 +3,16 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.APIURL != defaultAPIURL {
-		t.Errorf("expected API URL %q, got %q", defaultAPIURL, cfg.APIURL)
-	}
-	if cfg.APIKey != "" {
-		t.Errorf("expected empty API key, got %q", cfg.APIKey)
-	}
+	assert.Equal(t, defaultAPIURL, cfg.APIURL)
+	assert.Empty(t, cfg.APIKey)
 }
 
 func TestSaveAndLoad(t *testing.T) {
@@ -26,37 +24,23 @@ func TestSaveAndLoad(t *testing.T) {
 		APIKey: "test-api-key-12345",
 	}
 
-	if err := Save(cfg, path); err != nil {
-		t.Fatalf("Save() error: %v", err)
-	}
+	require.NoError(t, Save(cfg, path))
 
 	// Verify file permissions
 	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat() error: %v", err)
-	}
-	if perm := info.Mode().Perm(); perm != 0600 {
-		t.Errorf("expected file permissions 0600, got %o", perm)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
 
 	loaded, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
-	}
+	require.NoError(t, err)
 
-	if loaded.APIURL != cfg.APIURL {
-		t.Errorf("APIURL: expected %q, got %q", cfg.APIURL, loaded.APIURL)
-	}
-	if loaded.APIKey != cfg.APIKey {
-		t.Errorf("APIKey: expected %q, got %q", cfg.APIKey, loaded.APIKey)
-	}
+	assert.Equal(t, cfg.APIURL, loaded.APIURL)
+	assert.Equal(t, cfg.APIKey, loaded.APIKey)
 }
 
 func TestLoadNotFound(t *testing.T) {
 	_, err := Load("/nonexistent/path/config.yaml")
-	if err == nil {
-		t.Error("expected error for nonexistent config")
-	}
+	assert.Error(t, err)
 }
 
 func TestMaskAPIKey(t *testing.T) {
@@ -72,9 +56,7 @@ func TestMaskAPIKey(t *testing.T) {
 
 	for _, tt := range tests {
 		got := MaskAPIKey(tt.input)
-		if got != tt.want {
-			t.Errorf("MaskAPIKey(%q) = %q, want %q", tt.input, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "MaskAPIKey(%q)", tt.input)
 	}
 }
 
@@ -82,60 +64,39 @@ func TestLoadInvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
 	// Write invalid YAML
-	if err := os.WriteFile(path, []byte("{invalid: yaml: content: ["), 0600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte("{invalid: yaml: content: ["), 0600))
 	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for invalid YAML")
-	}
-	if !strings.Contains(err.Error(), "parsing config") {
-		t.Errorf("expected error to contain 'parsing config', got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parsing config")
 }
 
 func TestSaveCreatesDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	nestedPath := filepath.Join(tmpDir, "nested", "dir", "config.yaml")
 	cfg := &Config{APIURL: "https://test.api.com", APIKey: "test-key"}
-	if err := Save(cfg, nestedPath); err != nil {
-		t.Fatalf("Save() error: %v", err)
-	}
+	require.NoError(t, Save(cfg, nestedPath))
 	// Verify file was created
-	if _, err := os.Stat(nestedPath); err != nil {
-		t.Errorf("expected file to exist at %s: %v", nestedPath, err)
-	}
+	_, err := os.Stat(nestedPath)
+	assert.NoError(t, err, "expected file to exist at %s", nestedPath)
 }
 
 func TestLoadEmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(path, []byte(""), 0600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(""), 0600))
 	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load() unexpected error for empty file: %v", err)
-	}
-	if cfg.APIURL != defaultAPIURL {
-		t.Errorf("expected default APIURL %q, got %q", defaultAPIURL, cfg.APIURL)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, defaultAPIURL, cfg.APIURL)
 }
 
 func TestSaveAndLoadPreservesEmptyKey(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.yaml")
 	cfg := &Config{APIURL: "https://test.api.com", APIKey: ""}
-	if err := Save(cfg, path); err != nil {
-		t.Fatalf("Save() error: %v", err)
-	}
+	require.NoError(t, Save(cfg, path))
 	loaded, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
-	}
-	if loaded.APIKey != "" {
-		t.Errorf("expected empty APIKey, got %q", loaded.APIKey)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, loaded.APIKey)
 }
 
 func TestDefaultPath(t *testing.T) {
@@ -143,12 +104,8 @@ func TestDefaultPath(t *testing.T) {
 	if path == "" {
 		t.Skip("os.UserHomeDir() unavailable in this environment")
 	}
-	if !strings.Contains(path, ".kubeadapt") {
-		t.Errorf("expected path to contain '.kubeadapt', got %q", path)
-	}
-	if !strings.Contains(path, "config.yaml") {
-		t.Errorf("expected path to contain 'config.yaml', got %q", path)
-	}
+	assert.Contains(t, path, ".kubeadapt")
+	assert.Contains(t, path, "config.yaml")
 }
 
 func TestMaskAPIKey_Boundary(t *testing.T) {
@@ -164,21 +121,15 @@ func TestMaskAPIKey_Boundary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := MaskAPIKey(tt.input)
-			if got != tt.want {
-				t.Errorf("MaskAPIKey(%q) = %q, want %q", tt.input, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "MaskAPIKey(%q)", tt.input)
 		})
 	}
 }
 
 func TestLoadReadFileError(t *testing.T) {
 	_, err := Load("/nonexistent/path/to/config.yaml")
-	if err == nil {
-		t.Fatal("expected error for nonexistent file")
-	}
-	if !strings.Contains(err.Error(), "reading config") {
-		t.Errorf("expected error to contain 'reading config', got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading config")
 }
 
 func TestSave_EmptyPath(t *testing.T) {
@@ -197,10 +148,7 @@ func TestSave_EmptyPath(t *testing.T) {
 		}
 	})
 	cfg := &Config{APIURL: "http://test-empty-path.com", APIKey: "test-key"}
-	err := Save(cfg, "")
-	if err != nil {
-		t.Fatalf("Save(\"\") error: %v", err)
-	}
+	require.NoError(t, Save(cfg, ""))
 }
 
 func TestDefaultPath_ReturnsNonEmpty(t *testing.T) {
@@ -208,28 +156,18 @@ func TestDefaultPath_ReturnsNonEmpty(t *testing.T) {
 	if path == "" {
 		t.Skip("os.UserHomeDir() unavailable in this environment")
 	}
-	if !strings.Contains(path, ".kubeadapt") {
-		t.Errorf("expected path to contain '.kubeadapt', got %q", path)
-	}
-	if !strings.Contains(path, "config.yaml") {
-		t.Errorf("expected path to contain 'config.yaml', got %q", path)
-	}
+	assert.Contains(t, path, ".kubeadapt")
+	assert.Contains(t, path, "config.yaml")
 }
 
 func TestSaveWriteError(t *testing.T) {
 	// Try to save to a read-only directory (simulate write error)
 	tmpDir := t.TempDir()
 	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.Mkdir(readOnlyDir, 0500); err != nil {
-		t.Fatalf("Mkdir() error: %v", err)
-	}
+	require.NoError(t, os.Mkdir(readOnlyDir, 0500))
 	cfg := &Config{APIURL: "https://test.api.com", APIKey: "test-key"}
 	path := filepath.Join(readOnlyDir, "config.yaml")
 	err := Save(cfg, path)
-	if err == nil {
-		t.Fatal("expected error for write to read-only directory")
-	}
-	if !strings.Contains(err.Error(), "writing config") {
-		t.Errorf("expected error to contain 'writing config', got: %v", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "writing config")
 }

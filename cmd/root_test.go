@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func resetGlobals(t *testing.T) {
@@ -30,9 +32,7 @@ func dummyCmd() *cobra.Command {
 
 func writeConfigFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
-		t.Fatalf("writeConfigFile: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
 }
 
 func TestConfigOverrideChain_FlagOverridesEnv(t *testing.T) {
@@ -50,20 +50,12 @@ func TestConfigOverrideChain_FlagOverridesEnv(t *testing.T) {
 	apiKey = "flag-key"
 
 	cmd := dummyCmd()
-	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
-		t.Fatalf("PersistentPreRunE error: %v", err)
-	}
+	require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
 
 	rc := getRunContext(cmd)
-	if rc == nil {
-		t.Fatal("RunContext is nil after PersistentPreRunE")
-	}
-	if rc.Config.APIURL != "http://from-flag.com" {
-		t.Errorf("expected APIURL %q (flag wins), got %q", "http://from-flag.com", rc.Config.APIURL)
-	}
-	if rc.Config.APIKey != "flag-key" {
-		t.Errorf("expected APIKey %q (flag wins), got %q", "flag-key", rc.Config.APIKey)
-	}
+	require.NotNil(t, rc, "RunContext is nil after PersistentPreRunE")
+	assert.Equal(t, "http://from-flag.com", rc.Config.APIURL, "flag wins")
+	assert.Equal(t, "flag-key", rc.Config.APIKey, "flag wins")
 }
 
 func TestConfigOverrideChain_EnvOverridesConfig(t *testing.T) {
@@ -79,20 +71,12 @@ func TestConfigOverrideChain_EnvOverridesConfig(t *testing.T) {
 	cfgFile = cfgPath
 
 	cmd := dummyCmd()
-	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
-		t.Fatalf("PersistentPreRunE error: %v", err)
-	}
+	require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
 
 	rc := getRunContext(cmd)
-	if rc == nil {
-		t.Fatal("RunContext is nil after PersistentPreRunE")
-	}
-	if rc.Config.APIURL != "http://from-env.com" {
-		t.Errorf("expected APIURL %q (env wins), got %q", "http://from-env.com", rc.Config.APIURL)
-	}
-	if rc.Config.APIKey != "env-key" {
-		t.Errorf("expected APIKey %q (env wins), got %q", "env-key", rc.Config.APIKey)
-	}
+	require.NotNil(t, rc, "RunContext is nil after PersistentPreRunE")
+	assert.Equal(t, "http://from-env.com", rc.Config.APIURL, "env wins")
+	assert.Equal(t, "env-key", rc.Config.APIKey, "env wins")
 }
 
 func TestConfigOverrideChain_ConfigFallback(t *testing.T) {
@@ -105,20 +89,12 @@ func TestConfigOverrideChain_ConfigFallback(t *testing.T) {
 	cfgFile = cfgPath
 
 	cmd := dummyCmd()
-	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
-		t.Fatalf("PersistentPreRunE error: %v", err)
-	}
+	require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
 
 	rc := getRunContext(cmd)
-	if rc == nil {
-		t.Fatal("RunContext is nil after PersistentPreRunE")
-	}
-	if rc.Config.APIURL != "http://from-config.com" {
-		t.Errorf("expected APIURL %q (config wins), got %q", "http://from-config.com", rc.Config.APIURL)
-	}
-	if rc.Config.APIKey != "config-key" {
-		t.Errorf("expected APIKey %q (config wins), got %q", "config-key", rc.Config.APIKey)
-	}
+	require.NotNil(t, rc, "RunContext is nil after PersistentPreRunE")
+	assert.Equal(t, "http://from-config.com", rc.Config.APIURL, "config wins")
+	assert.Equal(t, "config-key", rc.Config.APIKey, "config wins")
 }
 
 func TestConfigMissing_UsesDefault(t *testing.T) {
@@ -127,16 +103,10 @@ func TestConfigMissing_UsesDefault(t *testing.T) {
 	cfgFile = filepath.Join(t.TempDir(), "nonexistent.yaml")
 
 	cmd := dummyCmd()
-	if err := rootCmd.PersistentPreRunE(cmd, nil); err != nil {
-		t.Fatalf("PersistentPreRunE error: %v", err)
-	}
+	require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
 
 	rc := getRunContext(cmd)
-	if rc == nil {
-		t.Fatal("RunContext is nil after PersistentPreRunE")
-	}
-	const wantURL = "https://public-api.kubeadapt.io"
-	if rc.Config.APIURL != wantURL {
-		t.Errorf("expected default APIURL %q, got %q", wantURL, rc.Config.APIURL)
-	}
+	require.NotNil(t, rc, "RunContext is nil after PersistentPreRunE")
+	const wantURL = "https://api.kubeadapt.io"
+	assert.Equal(t, wantURL, rc.Config.APIURL)
 }

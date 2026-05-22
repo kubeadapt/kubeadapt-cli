@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,7 @@ import (
 )
 
 const (
-	defaultAPIURL = "https://public-api.kubeadapt.io"
+	defaultAPIURL = "https://api.kubeadapt.io"
 	configFile    = "config.yaml"
 )
 
@@ -23,6 +24,7 @@ func Default() *Config {
 	return &Config{
 		Version: 1,
 		APIURL:  defaultAPIURL,
+		APIKey:  "",
 	}
 }
 
@@ -55,14 +57,13 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 
-	cfg := Default()
+	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
-	if cfg.Version == 0 {
-		cfg.Version = 1
-	}
+	cfg.APIURL = cmp.Or(cfg.APIURL, defaultAPIURL)
+	cfg.Version = cmp.Or(cfg.Version, 1)
 
 	return cfg, nil
 }

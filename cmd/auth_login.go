@@ -3,7 +3,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -63,19 +62,18 @@ var authLoginCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(c.APIURL, key)
-		_, verifyErr := client.GetOverview(context.Background())
+		_, _, verifyErr := client.GetOrganization(context.Background())
 		if verifyErr != nil {
-			var apiErr *api.APIError
-			if errors.As(verifyErr, &apiErr) && apiErr.IsAuthError() {
+			if api.IsUnauthorized(verifyErr) {
 				c.APIKey = ""
 				_ = config.Save(c, cfgFile)
-				return fmt.Errorf("API key is invalid. Please check your key and try again.")
+				return fmt.Errorf("invalid API key: key was NOT saved")
 			}
-			fmt.Fprintf(os.Stderr, "Warning: Could not verify API key (network error). Key saved — it will be verified on first use.\n")
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Could not verify API key (network error). Key saved — it will be verified on first use.\n")
 			return nil
 		}
 
-		fmt.Printf("Authenticated successfully. API key verified and saved to %s\n", config.DefaultPath())
+		fmt.Fprintf(cmd.OutOrStdout(), "Authenticated. API key saved to %s.\n", config.DefaultPath())
 		return nil
 	},
 }

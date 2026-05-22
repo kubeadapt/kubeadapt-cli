@@ -2,8 +2,10 @@ package output
 
 import (
 	"bytes"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testJSONData struct {
@@ -11,48 +13,26 @@ type testJSONData struct {
 	Cost *float64 `json:"cost"`
 }
 
-func TestJSONTo_ValidStruct(t *testing.T) {
+func TestRenderJSON_ValidStruct(t *testing.T) {
 	cost := 42.5
 	data := testJSONData{Name: "test", Cost: &cost}
 	var buf bytes.Buffer
-	if err := JSONTo(&buf, data); err != nil {
-		t.Fatalf("JSONTo() error: %v", err)
-	}
+	require.NoError(t, RenderJSON(&buf, data))
 	got := buf.String()
-	if !strings.Contains(got, `"name"`) {
-		t.Errorf("expected JSON to contain 'name' key, got: %s", got)
-	}
-	if !strings.Contains(got, `"test"`) {
-		t.Errorf("expected JSON to contain 'test' value, got: %s", got)
-	}
-	if !strings.Contains(got, `"cost"`) {
-		t.Errorf("expected JSON to contain 'cost' key, got: %s", got)
-	}
-	if !strings.Contains(got, `42.5`) {
-		t.Errorf("expected JSON to contain '42.5', got: %s", got)
+	for _, want := range []string{`"name"`, `"test"`, `"cost"`, `42.5`} {
+		assert.Contains(t, got, want)
 	}
 }
 
-func TestJSONTo_NilFields(t *testing.T) {
+func TestRenderJSON_NilFields(t *testing.T) {
 	data := testJSONData{Name: "test", Cost: nil}
 	var buf bytes.Buffer
-	if err := JSONTo(&buf, data); err != nil {
-		t.Fatalf("JSONTo() error: %v", err)
-	}
-	got := buf.String()
-	if !strings.Contains(got, "null") {
-		t.Errorf("expected JSON to contain 'null' for nil field, got: %s", got)
-	}
+	require.NoError(t, RenderJSON(&buf, data))
+	assert.Contains(t, buf.String(), "null")
 }
 
-func TestJSONTo_EmptySlice(t *testing.T) {
-	data := []string{}
+func TestRenderJSON_EmptySlice(t *testing.T) {
 	var buf bytes.Buffer
-	if err := JSONTo(&buf, data); err != nil {
-		t.Fatalf("JSONTo() error: %v", err)
-	}
-	got := buf.String()
-	if !strings.Contains(got, "[]") {
-		t.Errorf("expected JSON to contain '[]' for empty slice, got: %s", got)
-	}
+	require.NoError(t, RenderJSON(&buf, []string{}))
+	assert.Contains(t, buf.String(), "[]")
 }

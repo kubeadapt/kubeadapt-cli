@@ -4,20 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// JSON writes the value as indented JSON to stdout.
-func JSON(v interface{}) error {
-	return JSONTo(os.Stdout, v)
-}
-
-// JSONTo writes the value as indented JSON to the given writer.
-func JSONTo(w io.Writer, v interface{}) error {
+// RenderJSON writes the value as indented JSON to w.
+func RenderJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
 		return fmt.Errorf("encoding JSON: %w", err)
 	}
 	return nil
+}
+
+// RenderJSONWithMeta writes an envelope-shaped JSON document containing both
+// the data payload and the pagination metadata, so callers can extract the
+// next_cursor programmatically (jq '.meta.pagination.next_cursor'). When meta
+// is nil it falls back to plain RenderJSON over data.
+func RenderJSONWithMeta(w io.Writer, data any, meta *types.Meta) error {
+	if meta == nil {
+		return RenderJSON(w, data)
+	}
+	return RenderJSON(w, struct {
+		Data any         `json:"data"`
+		Meta *types.Meta `json:"meta"`
+	}{Data: data, Meta: meta})
 }
