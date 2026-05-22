@@ -39,3 +39,4 @@ settings:
     - internal
     - logger
     - pkg
+    - update

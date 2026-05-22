@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,47 @@ func cacheDir() string {
 	return filepath.Join(home, ".cache", "kubeadapt")
 }
 
+// isNewer reports whether latest is a strictly newer semver than current.
+// Pre-release and build-metadata suffixes are ignored. Returns false when
+// either version is empty or unparseable so the upgrade prompt fails closed
+// and never nags the user about an unverifiable "upgrade".
+func isNewer(latest, current string) bool {
+	l, ok := parseSemver(latest)
+	if !ok {
+		return false
+	}
+	c, ok := parseSemver(current)
+	if !ok {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if l[i] != c[i] {
+			return l[i] > c[i]
+		}
+	}
+	return false
+}
+
+func parseSemver(s string) ([3]int, bool) {
+	s = strings.TrimPrefix(s, "v")
+	if i := strings.IndexAny(s, "-+"); i >= 0 {
+		s = s[:i]
+	}
+	parts := strings.SplitN(s, ".", 3)
+	if len(parts) != 3 {
+		return [3]int{}, false
+	}
+	var out [3]int
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 {
+			return [3]int{}, false
+		}
+		out[i] = n
+	}
+	return out, true
+}
+
 func CheckForUpdate() string {
 	if version.Version == "dev" {
 		return ""
@@ -40,7 +82,7 @@ func CheckForUpdate() string {
 	if data, err := os.ReadFile(cachePath); err == nil {
 		var cached cachedCheck
 		if json.Unmarshal(data, &cached) == nil && time.Since(cached.CheckedAt) < cacheDuration {
-			if cached.LatestVersion != "" && cached.LatestVersion != version.Version {
+			if isNewer(cached.LatestVersion, version.Version) {
 				return fmt.Sprintf("A new version of kubeadapt is available: %s → %s\n  Update with: brew upgrade kubeadapt", version.Version, cached.LatestVersion)
 			}
 			return ""
@@ -66,12 +108,11 @@ func CheckForUpdate() string {
 	}
 
 	latest := strings.TrimPrefix(release.TagName, "v")
-	current := strings.TrimPrefix(version.Version, "v")
 	_ = os.MkdirAll(cacheDir(), 0700)
 	cacheData, _ := json.Marshal(cachedCheck{CheckedAt: time.Now(), LatestVersion: latest})
 	_ = os.WriteFile(cachePath, cacheData, 0600)
 
-	if latest != current && release.TagName != "" {
+	if isNewer(latest, version.Version) {
 		return fmt.Sprintf("A new version of kubeadapt is available: %s → %s\n  Update with: brew upgrade kubeadapt", version.Version, release.TagName)
 	}
 	return ""
