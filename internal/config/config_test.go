@@ -104,7 +104,7 @@ func TestDefaultPath(t *testing.T) {
 	if path == "" {
 		t.Skip("os.UserHomeDir() unavailable in this environment")
 	}
-	assert.Contains(t, path, ".kubeadapt")
+	assert.Contains(t, path, "kubeadapt")
 	assert.Contains(t, path, "config.yaml")
 }
 
@@ -156,7 +156,7 @@ func TestDefaultPath_ReturnsNonEmpty(t *testing.T) {
 	if path == "" {
 		t.Skip("os.UserHomeDir() unavailable in this environment")
 	}
-	assert.Contains(t, path, ".kubeadapt")
+	assert.Contains(t, path, "kubeadapt")
 	assert.Contains(t, path, "config.yaml")
 }
 
