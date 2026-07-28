@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultAPIURL = "https://api.kubeadapt.io"
+	defaultAPIURL = "https://public-api.kubeadapt.io"
 	configFile    = "config.yaml"
 )
 
@@ -36,6 +36,8 @@ func DefaultPath() string {
 	if err != nil {
 		return ""
 	}
+	// The legacy location is probed before os.UserConfigDir so that an existing
+	// user's config is not silently orphaned when they upgrade.
 	legacyPath := filepath.Join(home, ".kubeadapt", configFile)
 	if _, err := os.Stat(legacyPath); err == nil {
 		return legacyPath
@@ -83,7 +85,32 @@ func Save(cfg *Config, path string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	// Written to a sibling temp file and renamed into place so that a crash or
+	// full disk cannot truncate the existing config, which holds the user's
+	// only API key.
+	tmp, err := os.CreateTemp(dir, configFile+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		tmp.Close()
+		os.Remove(tmpPath)
+	}()
+
+	if err := tmp.Chmod(0600); err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("writing config: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 

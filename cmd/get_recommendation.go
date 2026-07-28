@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
 
 var getRecommendationCmd = &cobra.Command{
-	Use:   "recommendation <id>",
-	Short: "Show a recommendation",
-	Long:  `Show details for a single recommendation by UUID.`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "recommendation <id>",
+	Short:             "Show a recommendation",
+	Long:              `Show details for a single recommendation by UUID.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: firstArgOnly(completeRecommendationIDs),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Flags().Changed("cost-mode") {
-			return fmt.Errorf("--cost-mode is not accepted by the recommendation endpoint")
+		if err := rejectCostMode(cmd, api.EndpointRecommendation); err != nil {
+			return err
 		}
 		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)

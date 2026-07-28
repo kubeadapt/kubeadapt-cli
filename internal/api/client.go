@@ -14,18 +14,16 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
+	"github.com/kubeadapt/kubeadapt-cli/internal/version"
 )
 
 const (
 	defaultTimeout = 30 * time.Second
-	userAgent      = "kubeadapt-cli/dev"
+
 	errorBodyLimit = 200
 )
 
-// Client is the Kubeadapt public API HTTP client. It speaks the envelope
-// response protocol, captures rate-limit headers from every response, and
-// optionally retries once on HTTP 429. The zero value is not usable; construct
-// it via NewClient.
+// The zero Client is not usable; construct it via NewClient.
 type Client struct {
 	baseURL    string
 	apiKey     string
@@ -33,22 +31,20 @@ type Client struct {
 	logger     *zap.Logger
 	retryOnRL  bool
 	maxRetries int
-	sleeper    func(time.Duration)
+	sleeper    func(context.Context, time.Duration) error
 	rateLimit  *rateLimitSnapshot
 }
 
-// Option configures the Client.
 type Option func(*Client)
 
-// WithTimeout sets the HTTP client timeout. It mutates the underlying
-// http.Client; pair with WithHTTPClient if a custom transport is needed.
+// Mutates the underlying http.Client, so pair with WithHTTPClient when a custom
+// transport is needed.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Client) {
 		c.httpClient.Timeout = d
 	}
 }
 
-// WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
 		if hc != nil {
@@ -57,7 +53,6 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-// WithLogger sets the debug logger.
 func WithLogger(l *zap.Logger) Option {
 	return func(c *Client) {
 		if l != nil {
@@ -66,16 +61,14 @@ func WithLogger(l *zap.Logger) Option {
 	}
 }
 
-// WithRetryOnRateLimit enables or disables an automatic single retry after a
-// 429 response. The retry respects Retry-After. Defaults to false.
+// Retries respect Retry-After. Defaults to false.
 func WithRetryOnRateLimit(enable bool) Option {
 	return func(c *Client) {
 		c.retryOnRL = enable
 	}
 }
 
-// WithMaxRetries sets the maximum number of retries the client will issue
-// after a 429 response. Values below zero are clamped to zero. Defaults to 1.
+// Negative values clamp to zero. Defaults to 1.
 func WithMaxRetries(n int) Option {
 	return func(c *Client) {
 		if n < 0 {
@@ -85,9 +78,9 @@ func WithMaxRetries(n int) Option {
 	}
 }
 
-// withSleeper overrides the sleep function used between retries. It is
-// unexported and intended for tests in the same package.
-func withSleeper(fn func(time.Duration)) Option {
+// Callers that also pace against rate-limit headers share one sleeper, so a
+// single wait budget covers both kinds of wait.
+func WithSleeper(fn func(context.Context, time.Duration) error) Option {
 	return func(c *Client) {
 		if fn != nil {
 			c.sleeper = fn
@@ -95,7 +88,6 @@ func withSleeper(fn func(time.Duration)) Option {
 	}
 }
 
-// NewClient creates a new API client.
 func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
@@ -104,7 +96,7 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 		logger:     zap.NewNop(),
 		retryOnRL:  false,
 		maxRetries: 1,
-		sleeper:    time.Sleep,
+		sleeper:    SleepContext,
 		rateLimit:  &rateLimitSnapshot{},
 	}
 	for _, opt := range opts {
@@ -113,27 +105,14 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	return c
 }
 
-// RateLimit returns the most recent rate-limit snapshot captured from API
-// responses. The returned value is a copy and safe to retain.
+// The returned snapshot is a copy and safe to retain.
 func (c *Client) RateLimit() RateLimit {
 	return c.rateLimit.load()
 }
 
-// DoEnvelopeGet issues a GET request against the API and decodes the envelope
-// response. It returns the unwrapped Data payload, a pointer to the Meta
-// block, and an error.
-//
-// Errors fall into three buckets:
-//   - Transport / decode failures: returned as a plain error wrapping the
-//     underlying cause. Callers can check via errors.Is on context errors.
-//   - API-level errors (envelope.Error populated, or non-2xx status): returned
-//     as *APIError with StatusCode, Code, Message, and Details. On a 429 the
-//     RetryAfter field is populated from the Retry-After header.
-//   - Success: nil error, populated data and meta.
-//
-// When WithRetryOnRateLimit(true) is set, a 429 response triggers up to
-// maxRetries additional attempts after sleeping for the Retry-After delay
-// (defaulting to one second if absent or malformed).
+// Returns the unwrapped Data payload and Meta. API-level failures come back as
+// *APIError (RetryAfter set on 429); transport and decode failures come back as
+// a plain wrapped error.
 func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params url.Values) (T, *types.Meta, error) {
 	var zero T
 
@@ -150,7 +129,7 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 		}
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("User-Agent", buildUserAgent())
 
 		start := time.Now()
 		c.logger.Debug("api request",
@@ -176,7 +155,7 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 			zap.String("url", fullURL),
 			zap.Int("status", resp.StatusCode),
 			zap.Duration("duration", time.Since(start)),
-			zap.String("request_id", resp.Header.Get("X-Request-ID")),
+			zap.String("request_id", resolveRequestID(resp.Header, body)),
 		)
 
 		if resp.StatusCode == http.StatusTooManyRequests && c.retryOnRL && attempt < c.maxRetries {
@@ -184,7 +163,9 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 			if d <= 0 {
 				d = time.Second
 			}
-			c.sleeper(d)
+			if sleepErr := c.sleeper(ctx, d); sleepErr != nil {
+				return zero, nil, sleepErr
+			}
 			attempt++
 			continue
 		}
@@ -229,10 +210,8 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 	}
 }
 
-// appendCursorParams adds cursor, limit, and include_total to params using the
-// standard query keys understood by the Kubeadapt public API. A nil params
-// map is allocated lazily so callers can write
-// p := appendCursorParams(nil, ...). limit<=0 omits the limit param.
+// A nil params map is allocated lazily, so callers may pass nil. limit<=0 omits
+// the limit param.
 func appendCursorParams(params url.Values, cursor string, limit int, includeTotal bool) url.Values {
 	if params == nil {
 		params = url.Values{}
@@ -249,11 +228,8 @@ func appendCursorParams(params url.Values, cursor string, limit int, includeTota
 	return params
 }
 
-// pickScopedOrFlat chooses between the cluster-scoped path (when a single
-// cluster ID is supplied) and the flat path (otherwise). It returns the path
-// to call plus the comma-separated cluster_id value to attach as a query
-// param. When using the scoped path the cluster_id is consumed by the URL
-// itself and the returned csvParam is empty.
+// Returns the path plus the CSV cluster_id query value. On the scoped path the
+// cluster ID is consumed by the URL itself, so csvParam comes back empty.
 func pickScopedOrFlat(
 	scopedPathFn func(clusterID string) string,
 	flatPath string,
@@ -271,25 +247,74 @@ func pickScopedOrFlat(
 	return flatPath, strings.Join(nonEmpty, ",")
 }
 
-// validateNoCostMode returns an *APIError with code INVALID_COST_MODE if the
-// caller has set the cost_mode query param. Per-resource methods that call
-// endpoints which reject cost_mode (cluster, node, node-group, recommendation,
-// organization root) should invoke this BEFORE sending the request so that the
-// CLI rejects locally — fast feedback, no wasted network round-trip.
-func validateNoCostMode(params url.Values, endpoint string) error {
-	if params == nil {
+// Named once so the CLI's pre-request refusal and the server's 422 cannot drift
+// onto different endpoint names.
+const (
+	EndpointClusters        = "clusters"
+	EndpointCluster         = "cluster"
+	EndpointNodes           = "nodes"
+	EndpointNode            = "node"
+	EndpointNodeGroups      = "node-groups"
+	EndpointNodeGroup       = "node-group"
+	EndpointRecommendations = "recommendations"
+	EndpointRecommendation  = "recommendation"
+	EndpointOrganization    = "organization"
+	EndpointTeamAssignments = "team-assignments"
+)
+
+// Names the --cost-mode flag, not the cost_mode param: it is raised before any
+// request, so the user's own input is all they can act on.
+type CostModeUnsupportedError struct {
+	Endpoint string
+}
+
+func (e *CostModeUnsupportedError) Error() string {
+	return "--cost-mode is not accepted by the " + e.Endpoint + " endpoint"
+}
+
+// Called before a request is built, so the refusal costs no round-trip.
+func RejectCostMode(endpoint, costMode string) error {
+	if costMode == "" {
 		return nil
 	}
-	if v := params.Get("cost_mode"); v != "" {
-		return &APIError{
-			StatusCode: http.StatusUnprocessableEntity,
-			Code:       CodeInvalidCostMode,
-			Message:    fmt.Sprintf("%s does not accept cost_mode", endpoint),
-			Details: []map[string]any{{
-				"field":   "cost_mode",
-				"allowed": []string{},
-			}},
-		}
+	return &CostModeUnsupportedError{Endpoint: endpoint}
+}
+
+// Wire-shaped form of RejectCostMode, mirroring the server's 422.
+func validateNoCostMode(params url.Values, endpoint string) error {
+	rejection := RejectCostMode(endpoint, params.Get("cost_mode"))
+	if rejection == nil {
+		return nil
 	}
-	return nil
+	return &APIError{
+		StatusCode: http.StatusUnprocessableEntity,
+		Code:       CodeInvalidCostMode,
+		Message:    rejection.Error(),
+		Details: []map[string]any{{
+			"field":   "cost_mode",
+			"allowed": []string{},
+		}},
+	}
+}
+
+func buildUserAgent() string {
+	return "kubeadapt-cli/" + version.Version
+}
+
+// The API returns the correlation id in the envelope body, not a header, so a
+// header-only lookup always came back empty. Parsing just this one field keeps
+// malformed or non-envelope responses logging cleanly instead of erroring.
+func resolveRequestID(h http.Header, body []byte) string {
+	if id := h.Get("X-Request-ID"); id != "" {
+		return id
+	}
+	var envelope struct {
+		Meta struct {
+			RequestID string `json:"request_id"`
+		} `json:"meta"`
+	}
+	if json.Unmarshal(body, &envelope) != nil {
+		return ""
+	}
+	return envelope.Meta.RequestID
 }

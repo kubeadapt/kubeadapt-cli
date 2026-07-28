@@ -9,16 +9,25 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 )
 
-// newHealthCmd returns the `kubeadapt health` subcommand. It calls the
-// public API's unauthenticated /health endpoint to verify connectivity
-// and print the server status + version. It is most useful when
-// diagnosing networking or DNS issues without consuming an API key.
+// These keys are a scripting contract (`health -o json | jq .status`); renaming
+// one breaks callers even though nothing in-tree references them.
+type healthInfo struct {
+	Status  string `json:"status"`
+	Version string `json:"version,omitempty"`
+	URL     string `json:"url"`
+}
+
+// Uses the unauthenticated /health endpoint, so it diagnoses networking or DNS
+// without consuming an API key.
 func newHealthCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "health",
-		Short: "Check API server health (no authentication required)",
+		Use:     "health",
+		Short:   "Check API server health (no authentication required)",
+		GroupID: groupUtility,
 		Long: `Performs an unauthenticated GET /health request against the configured
 API URL (--api-url / KUBEADAPT_API_URL / config file) and prints the result.
 
@@ -67,11 +76,31 @@ non-2xx status.`,
 				return fmt.Errorf("decode health response: %w", err)
 			}
 
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Status:  %s\n", body.Status)
-			if body.Version != "" {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Version: %s\n", body.Version)
+			info := healthInfo{Status: body.Status, Version: body.Version, URL: url}
+
+			outFmt := outputFmt
+			if rctx.OutputFmt != "" {
+				outFmt = rctx.OutputFmt
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "URL:     %s\n", url)
+
+			w := cmd.OutOrStdout()
+			switch outFmt {
+			case formatJSON:
+				return output.RenderJSON(w, info)
+			case formatYAML:
+				return output.RenderYAML(w, info)
+			}
+
+			// The status is the answer the command exists to give, so --quiet
+			// trims only the surrounding context lines.
+			_, _ = fmt.Fprintf(w, "Status:  %s\n", info.Status)
+			if rctx.Quiet {
+				return nil
+			}
+			if info.Version != "" {
+				_, _ = fmt.Fprintf(w, "Version: %s\n", info.Version)
+			}
+			_, _ = fmt.Fprintf(w, "URL:     %s\n", info.URL)
 			return nil
 		},
 	}

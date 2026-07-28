@@ -1,8 +1,0 @@
-site_name: CLI Documentation
-site_description: Kubeadapt CLI documentation
-
-nav:
-  - Home: index.md
-
-plugins:
-  - techdocs-core

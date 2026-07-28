@@ -1,9 +1,7 @@
 package types
 
-// Team is the /v1 Team resource. AssignedWorkloads / AssignedPVs are raw
-// counts from team_assignments — for the breakdown call
-// /v1/teams/{team_id}/assignments. Cost is built live from CostQL on
-// every read.
+// AssignedWorkloads and AssignedPVs are raw counts; the breakdown lives at
+// /v1/teams/{team_id}/assignments. Cost is computed live on every read.
 type Team struct {
 	ID                string       `json:"id"`
 	Kind              string       `json:"kind"`
@@ -13,7 +11,6 @@ type Team struct {
 	Cost              TeamCost     `json:"cost"`
 }
 
-// TeamMetadata is the identity / governance sub-block for a Team.
 type TeamMetadata struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description,omitempty"`
@@ -25,9 +22,8 @@ type TeamMetadata struct {
 	LastSeenAt  string     `json:"last_seen_at,omitempty"`
 }
 
-// TeamCost is the live run-rate cost block on a Team. INCLUDES CostMode —
-// team cost is a sum-of-workload-costs across assignments which DOES vary
-// by mode.
+// TeamCost includes CostMode: it sums workload costs across assignments, so it
+// varies by mode.
 type TeamCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`

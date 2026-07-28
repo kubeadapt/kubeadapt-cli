@@ -1,13 +1,8 @@
 package types
 
-// Recommendation is the /v1 Recommendation resource. One of the bespoke
-// resource shapes — metadata + current + recommended + applied + savings +
-// metrics_snapshot — NOT the standard capacity/utilization/cost 4-block
-// pattern. The endpoint REJECTS ?cost_mode= (savings are mode-agnostic).
-//
-// Config sub-blocks (Current.Config, Recommended.Config, Applied.Config)
-// vary by recommendation_type and are decoded as map[string]any to mirror
-// the backend's polymorphic JSON. Same applies to MetricsSnapshot.
+// Recommendation does not follow the standard capacity/utilization/cost shape,
+// and its endpoint rejects ?cost_mode=. The Config sub-blocks are map[string]any
+// because their shape is polymorphic on recommendation_type.
 type Recommendation struct {
 	ID              string                 `json:"id"`
 	Kind            string                 `json:"kind"`
@@ -19,9 +14,7 @@ type Recommendation struct {
 	MetricsSnapshot map[string]any         `json:"metrics_snapshot,omitempty"`
 }
 
-// RecommendationMetadata is the identity / classification sub-block for
-// a Recommendation. RecommendationType drives the polymorphic shape of
-// the Config sub-blocks.
+// RecommendationType drives the polymorphic shape of the Config sub-blocks.
 type RecommendationMetadata struct {
 	RecommendationType string    `json:"recommendation_type"`
 	ResourceType       string    `json:"resource_type,omitempty"`
@@ -40,29 +33,21 @@ type RecommendationMetadata struct {
 	UpdatedAt          string    `json:"updated_at,omitempty"`
 }
 
-// RecommendationSnapshot is the "current state" sub-block — the resource
-// configuration and hourly cost as it stands today.
 type RecommendationSnapshot struct {
 	Config     map[string]any `json:"config,omitempty"`
 	HourlyCost Money          `json:"hourly_cost"`
 }
 
-// RecommendationProposal is the "recommended state" sub-block — the
-// proposed resource configuration if the recommendation is applied.
 type RecommendationProposal struct {
 	Config map[string]any `json:"config,omitempty"`
 }
 
-// RecommendationApplied is the "applied state" sub-block — the resource
-// configuration actually applied by the customer (may differ from
-// Proposal if the customer partially applied the recommendation).
+// RecommendationApplied may differ from the proposal when the customer applied
+// it only partially.
 type RecommendationApplied struct {
 	Config map[string]any `json:"config"`
 }
 
-// RecommendationSavings is the cost-impact sub-block for a Recommendation.
-// Only carries the pre-apply hourly estimate; clients format hourly figures
-// as needed.
 type RecommendationSavings struct {
 	EstimatedHourly Money `json:"estimated_hourly"`
 }

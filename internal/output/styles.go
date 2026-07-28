@@ -13,10 +13,6 @@ var (
 
 // Common styles.
 var (
-	StyleHeader = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(ColorPrimary)
-
 	StyleSuccess = lipgloss.NewStyle().
 			Foreground(ColorGreen)
 
@@ -28,7 +24,4 @@ var (
 
 	StyleMuted = lipgloss.NewStyle().
 			Foreground(ColorGray)
-
-	StyleBold = lipgloss.NewStyle().
-			Bold(true)
 )

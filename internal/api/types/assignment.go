@@ -1,20 +1,15 @@
 package types
 
-// TeamAssignment is a single-block resource — does not follow the
-// capacity/utilization/cost pattern. It binds a Team to a Kubernetes
-// entity (cluster / namespace / workload) with an optional weight for
-// shared-cost allocation.
+// TeamAssignment binds a Team to a cluster, namespace or workload, with an
+// optional weight for shared-cost allocation.
 type TeamAssignment struct {
 	ID       string                 `json:"id"`
 	Kind     string                 `json:"kind"`
 	Metadata TeamAssignmentMetadata `json:"metadata"`
 }
 
-// TeamAssignmentMetadata is the assignment-binding sub-block.
-//
-// AssignedByUserID is a pointer to distinguish "system-assigned" (null)
-// from "human-assigned" (string user ID). Source is one of "manual",
-// "label", "auto" (the backend may add more values).
+// AssignedByUserID is a pointer to distinguish system-assigned (null) from
+// human-assigned. Source is "manual", "label" or "auto"; more may be added.
 type TeamAssignmentMetadata struct {
 	Team             NestedRef `json:"team"`
 	Cluster          NestedRef `json:"cluster"`

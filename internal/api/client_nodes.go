@@ -7,12 +7,11 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// NodeFilter narrows the result set of ListNodes. The endpoint REJECTS
-// cost_mode (node has a single physical bill), so this struct has no
-// CostModeOpt. ClusterIDs picks scoped vs flat path.
+// The endpoint rejects cost_mode, so this struct has no CostModeOpt.
+// ClusterIDs picks the scoped vs flat path.
 type NodeFilter struct {
 	PagedOpts
-	ClusterIDs   []string // single → /v1/clusters/{cid}/nodes; multi/empty → /v1/nodes
+	ClusterIDs   []string // single -> /v1/clusters/{cid}/nodes; multi/empty -> /v1/nodes
 	NodeGroups   []string // csv
 	InstanceType string
 	Zone         string
@@ -22,8 +21,8 @@ type NodeFilter struct {
 	CapacityType string // on-demand|spot
 }
 
-// ListNodes lists nodes. With a single ClusterID it calls the scoped path;
-// otherwise it calls the flat path and forwards the cluster_id list as CSV.
+// One ClusterID uses the scoped path; otherwise the flat path with the
+// cluster_id list forwarded as CSV.
 func (c *Client) ListNodes(
 	ctx context.Context, f NodeFilter,
 ) ([]types.Node, *types.Meta, error) {
@@ -55,8 +54,6 @@ func (c *Client) ListNodes(
 	return DoEnvelopeGet[[]types.Node](ctx, c, path, params)
 }
 
-// GetNode fetches a node detail via GET /v1/nodes/{node_uid}. The endpoint
-// rejects cost_mode.
 func (c *Client) GetNode(
 	ctx context.Context, nodeUID string,
 ) (*types.Node, *types.Meta, error) {

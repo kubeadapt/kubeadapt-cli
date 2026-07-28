@@ -7,8 +7,7 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// RecommendationFilter narrows the result set of ListRecommendations. The
-// endpoint REJECTS cost_mode (savings are mode-agnostic), so this struct
+// Savings are mode-agnostic, so the endpoint rejects cost_mode and this struct
 // has no CostModeOpt.
 type RecommendationFilter struct {
 	PagedOpts
@@ -23,7 +22,6 @@ type RecommendationFilter struct {
 	MinSavingsHourly   string   // decimal string
 }
 
-// ListRecommendations lists recommendations matching the supplied filter.
 func (c *Client) ListRecommendations(
 	ctx context.Context, f RecommendationFilter,
 ) ([]types.Recommendation, *types.Meta, error) {
@@ -53,8 +51,6 @@ func (c *Client) ListRecommendations(
 	return DoEnvelopeGet[[]types.Recommendation](ctx, c, "/v1/recommendations", params)
 }
 
-// GetRecommendation fetches a recommendation by ID via
-// GET /v1/recommendations/{rec_id}. The endpoint rejects cost_mode.
 func (c *Client) GetRecommendation(
 	ctx context.Context, recID string,
 ) (*types.Recommendation, *types.Meta, error) {

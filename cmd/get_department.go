@@ -11,9 +11,10 @@ import (
 )
 
 var getDepartmentCmd = &cobra.Command{
-	Use:   "department <dept-id>",
-	Short: "Show a department",
-	Args:  cobra.ExactArgs(1),
+	Use:               "department <dept-id>",
+	Short:             "Show a department",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: firstArgOnly(completeDepartmentIDs),
 	Example: `  kubeadapt get department dept-abc-123
   kubeadapt get department dept-abc-123 --cost-mode workload_only`,
 	RunE: func(cmd *cobra.Command, args []string) error {

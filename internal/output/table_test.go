@@ -92,6 +92,61 @@ func TestRenderClusters_EndOfResults(t *testing.T) {
 	assert.Contains(t, buf.String(), "End of results.")
 }
 
+func TestSetQuiet_SuppressesFooterNotData(t *testing.T) {
+	items := []types.Cluster{sampleCluster("prod-east")}
+	meta := &types.Meta{Pagination: &types.Pagination{Limit: 50, HasMore: false}}
+
+	SetQuiet(true)
+	t.Cleanup(func() { SetQuiet(false) })
+
+	var buf bytes.Buffer
+	require.NoError(t, RenderClusters(&buf, items, meta))
+	out := buf.String()
+	assert.NotContains(t, out, "Showing 1")
+	assert.NotContains(t, out, "End of results.")
+	assert.Contains(t, out, "prod-east")
+}
+
+func TestSetQuiet_KeepsNextCursor(t *testing.T) {
+	cursor := "eyJ2IjoxLCJjIjoibmV4dC1wYWdlIn0="
+	items := []types.Cluster{sampleCluster("prod-east")}
+	meta := &types.Meta{Pagination: &types.Pagination{Limit: 50, HasMore: true, NextCursor: cursor}}
+
+	SetQuiet(true)
+	t.Cleanup(func() { SetQuiet(false) })
+
+	var buf bytes.Buffer
+	require.NoError(t, RenderClusters(&buf, items, meta))
+	out := buf.String()
+	assert.Contains(t, out, "--cursor="+cursor,
+		"--quiet dropping the cursor silently truncates a scripted paginated run")
+	assert.NotContains(t, out, "Showing 1", "descriptive chrome stays suppressed")
+	assert.NotContains(t, out, "--paginate", "the prose hint is chrome")
+}
+
+func TestPaginationCursorHint(t *testing.T) {
+	tests := []struct {
+		name string
+		meta *types.Meta
+		want string
+	}{
+		{name: "nil meta", meta: nil},
+		{name: "nil pagination", meta: &types.Meta{}},
+		{name: "no more pages", meta: &types.Meta{Pagination: &types.Pagination{HasMore: false, NextCursor: "c1"}}},
+		{name: "more pages but no cursor", meta: &types.Meta{Pagination: &types.Pagination{HasMore: true}}},
+		{
+			name: "more pages with cursor",
+			meta: &types.Meta{Pagination: &types.Pagination{HasMore: true, NextCursor: "c1"}},
+			want: "--cursor=c1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, PaginationCursorHint(tt.meta))
+		})
+	}
+}
+
 func TestRenderOrganization(t *testing.T) {
 	var buf bytes.Buffer
 	org := types.Organization{

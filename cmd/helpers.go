@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/spf13/cobra"
@@ -15,12 +18,25 @@ func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
 	if rc.Config.APIKey == "" {
 		return nil, fmt.Errorf("no API key configured. Run 'kubeadapt auth login' first")
 	}
-	return api.NewClient(rc.Config.APIURL, rc.Config.APIKey, api.WithLogger(rc.Logger)), nil
+	opts := []api.Option{api.WithLogger(rc.Logger)}
+	// Retry only under --paginate. A single request that 429s should still fail
+	// fast: the user is waiting on one answer and can decide for themselves,
+	// whereas abandoning a 700-request run over one 429 throws away real work.
+	if paginateRequested(cmd) {
+		opts = append(opts,
+			api.WithRetryOnRateLimit(true),
+			api.WithMaxRetries(paginateRetries),
+			api.WithSleeper(paginateSleep),
+		)
+	}
+	return api.NewClient(rc.Config.APIURL, rc.Config.APIKey, opts...), nil
 }
 
-// Flag-name constants for the persistent pagination + cost-mode flags
-// registered on getCmd. Used by parsePagedFlags and any subcommand that
-// needs to read them by name.
+func paginateRequested(cmd *cobra.Command) bool {
+	v, err := cmd.Flags().GetBool(flagPaginate)
+	return err == nil && v
+}
+
 const (
 	flagCostMode     = "cost-mode"
 	flagCursor       = "cursor"
@@ -29,23 +45,36 @@ const (
 	flagIncludeTotal = "include-total"
 )
 
-// Output format constants for the --output / -o flag. Used in every list and
-// detail subcommand to dispatch between table, JSON, and YAML rendering.
 const (
 	formatTable = "table"
 	formatJSON  = "json"
 	formatYAML  = "yaml"
 )
 
-// PagedFlags is the resolved set of pagination + cost-mode flags shared by
-// every `kubeadapt get` list subcommand. It mirrors api.PagedOpts +
-// api.CostModeOpt and is produced by parsePagedFlags(cmd).
+// PagedFlags mirrors api.PagedOpts + api.CostModeOpt.
 type PagedFlags struct {
 	CostMode     string
 	Cursor       string
 	Limit        int
 	Paginate     bool
 	IncludeTotal bool
+	MaxWait      time.Duration
+}
+
+// Shared by the completion registration and the RunE check so the two can
+// never drift into accepting different sets.
+var originValues = []string{"k8s", "kubeadapt"}
+
+// registerEnumFlag only wires shell completion, which a scripted or hand-typed
+// value never passes through. Repeatable enum flags still need checking here so
+// a typo is a usage error rather than an opaque API rejection.
+func validateEnumSlice(flag string, values, allowed []string) error {
+	for _, v := range values {
+		if !slices.Contains(allowed, v) {
+			return usagef("invalid --%s %q (must be one of: %s)", flag, v, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
 }
 
 func isValidCostMode(s string) bool {
@@ -56,10 +85,8 @@ func isValidCostMode(s string) bool {
 	return false
 }
 
-// parsePagedFlags reads the PersistentFlags from the get command tree and
-// returns them as a PagedFlags. It validates the cost-mode enum and the
-// limit range; on error it returns an error suitable for printing to the
-// user. It MUST be called from every `get *` list subcommand's RunE.
+// Validates the cost-mode enum and limit range, returning a user-printable
+// error. Must be called from every `get *` list subcommand's RunE.
 func parsePagedFlags(cmd *cobra.Command) (PagedFlags, error) {
 	var f PagedFlags
 	var err error
@@ -68,7 +95,7 @@ func parsePagedFlags(cmd *cobra.Command) (PagedFlags, error) {
 		return f, fmt.Errorf("read %s: %w", flagCostMode, err)
 	}
 	if !isValidCostMode(f.CostMode) {
-		return f, fmt.Errorf("invalid --cost-mode %q (must be one of: fully_loaded, workload_only)", f.CostMode)
+		return f, usagef("invalid --cost-mode %q (must be one of: fully_loaded, workload_only)", f.CostMode)
 	}
 	if f.Cursor, err = cmd.Flags().GetString(flagCursor); err != nil {
 		return f, fmt.Errorf("read %s: %w", flagCursor, err)
@@ -77,13 +104,25 @@ func parsePagedFlags(cmd *cobra.Command) (PagedFlags, error) {
 		return f, fmt.Errorf("read %s: %w", flagLimit, err)
 	}
 	if f.Limit < 1 || f.Limit > 500 {
-		return f, fmt.Errorf("invalid --limit %d (must be 1..500)", f.Limit)
+		return f, usagef("invalid --limit %d (must be 1..500)", f.Limit)
 	}
 	if f.Paginate, err = cmd.Flags().GetBool(flagPaginate); err != nil {
 		return f, fmt.Errorf("read %s: %w", flagPaginate, err)
 	}
 	if f.IncludeTotal, err = cmd.Flags().GetBool(flagIncludeTotal); err != nil {
 		return f, fmt.Errorf("read %s: %w", flagIncludeTotal, err)
+	}
+	// Absent flag rather than absent value: parsePagedFlags is also called
+	// against trimmed-down command trees that register only the flags they
+	// exercise, so a missing --max-wait means "take the default", not an error.
+	f.MaxWait = defaultMaxWait
+	if cmd.Flags().Lookup(flagMaxWait) != nil {
+		if f.MaxWait, err = cmd.Flags().GetDuration(flagMaxWait); err != nil {
+			return f, fmt.Errorf("read %s: %w", flagMaxWait, err)
+		}
+	}
+	if f.MaxWait < 0 {
+		return f, usagef("invalid --%s %s (must be >= 0; 0 means unbounded)", flagMaxWait, f.MaxWait)
 	}
 	return f, nil
 }

@@ -8,7 +8,7 @@ before:
 
 builds:
   - id: default
-    main: ./main.go
+    main: ./cmd/kubeadapt
     binary: kubeadapt
     env:
       - CGO_ENABLED=0
@@ -27,10 +27,10 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -52,13 +52,6 @@ release:
   draft: false
   prerelease: auto
 
-# ──────────────────────────────────────────────────────────────────────────────
-# HOMEBREW DISTRIBUTION
-# Enables: brew install kubeadapt/tap/kubeadapt
-#
-# Prerequisite: create github.com/kubeadapt/homebrew-tap (public repo)
-# If you don't need Homebrew distribution, delete this entire section.
-# ──────────────────────────────────────────────────────────────────────────────
 brews:
   - name: kubeadapt
     repository:
@@ -75,30 +68,3 @@ brews:
       bin.install "kubeadapt"
     test: |
       system "#{bin}/kubeadapt", "version"
-
-# ──────────────────────────────────────────────────────────────────────────────
-# KREW DISTRIBUTION (kubectl plugin manager)
-# Enables: kubectl krew install kubeadapt  →  kubectl kubeadapt
-#
-# Prerequisites:
-#   1. Create github.com/kubeadapt/krew-index (public repo)
-#   2. For official distribution: open PR to kubernetes-sigs/krew-index
-#
-# Binary naming: GoReleaser will also produce a kubectl-kubeadapt binary
-# that kubectl plugin discovery picks up automatically from PATH.
-#
-# If this CLI is NOT a kubectl plugin, delete this entire section.
-# ──────────────────────────────────────────────────────────────────────────────
-# krews:
-#   - name: kubeadapt
-#     repository:
-#       owner: kubeadapt
-#       name: krew-index
-#       branch: main
-#     commit_author:
-#       name: platform-assistant[bot]
-#       email: platform-assistant[bot]@users.noreply.github.com
-#     commit_msg_template: "chore(deps): update krew manifest for {{ .ProjectName }} {{ .Tag }}"
-#     homepage: "https://kubeadapt.io"
-#     description: "Kubeadapt CLI for Kubernetes cost optimization"
-#     short_description: "Kubernetes cost optimization CLI"

@@ -1,7 +1,5 @@
-// Package testutil provides an in-process mock HTTP server and deterministic
-// fixtures for testing the Kubeadapt public API client. The mock speaks the
-// envelope-shaped /v1 response protocol — every successful response is wrapped
-// in {data, meta} and every error response in {data: null, meta, error}.
+// Package testutil provides an in-process mock of the envelope-shaped /v1
+// protocol: {data, meta} on success, {data: null, meta, error} on failure.
 package testutil
 
 import (
@@ -12,8 +10,7 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// Deterministic values used in every mock response so tests stay reproducible
-// across runs and across machines.
+// Deterministic so tests stay reproducible across runs and machines.
 const (
 	mockRequestID = "00000000-0000-0000-0000-mockrequest"
 	mockAppliedAt = "2025-05-20T14:30:00Z"
@@ -23,9 +20,6 @@ const (
 	envKeyErr  = "error"
 )
 
-// defaultMeta returns a Meta block with the canonical mock RequestID and
-// AppliedAt populated. Callers can mutate the returned value before passing
-// it to WriteEnvelope (e.g. to set CostMode or Pagination).
 func defaultMeta() types.Meta {
 	return types.Meta{
 		RequestID: mockRequestID,
@@ -33,13 +27,8 @@ func defaultMeta() types.Meta {
 	}
 }
 
-// WriteEnvelope writes a 200-OK enveloped response containing the supplied
-// payload as `data` and `meta` as the response metadata block. Missing
-// RequestID / AppliedAt fields on `meta` are filled in with the canonical
-// mock defaults so tests do not need to set them explicitly.
-//
-// WriteEnvelope does NOT set status — callers that need a non-2xx status
-// should use WriteError instead.
+// Missing RequestID / AppliedAt are filled with the mock defaults. Does not set
+// status; use WriteError for non-2xx.
 func WriteEnvelope(w http.ResponseWriter, data any, meta types.Meta) {
 	if meta.RequestID == "" {
 		meta.RequestID = mockRequestID
@@ -55,21 +44,13 @@ func WriteEnvelope(w http.ResponseWriter, data any, meta types.Meta) {
 	writeJSON(w, body)
 }
 
-// WritePaginated wraps a slice payload with a Pagination block and writes
-// the enveloped response. The pagination value is attached to meta.Pagination
-// before the envelope is serialized.
 func WritePaginated(w http.ResponseWriter, items any, meta types.Meta, pagination types.Pagination) {
 	meta.Pagination = &pagination
 	WriteEnvelope(w, items, meta)
 }
 
-// WriteError writes an envelope error response with the supplied HTTP status,
-// error code, and message. Optional `details` blocks are attached to the
-// `error.details` array as-is (one map per details argument).
-//
-// When `code` is CodeRateLimited, a Retry-After: 1 header is set before the
-// status line is flushed — this is required for the client's retry path to
-// observe the header.
+// For CodeRateLimited a Retry-After: 1 header is set before the status line is
+// flushed, which the client's retry path requires in order to see it.
 func WriteError(w http.ResponseWriter, status int, code api.ErrorCode, msg string, details ...map[string]any) {
 	w.Header().Set("Content-Type", "application/json")
 	if code == api.CodeRateLimited {
@@ -94,10 +75,8 @@ func WriteError(w http.ResponseWriter, status int, code api.ErrorCode, msg strin
 	writeJSON(w, body)
 }
 
-// writeJSON serializes body as JSON to w. Encoding errors are silently
-// dropped — the mock controls its own inputs so any error here is a test
-// bug, not a runtime concern, and the response body will already have
-// started flushing by the time Encode returns.
+// Encoding errors are dropped: the mock controls its inputs, and the body has
+// already begun flushing by the time Encode returns.
 func writeJSON(w http.ResponseWriter, body any) {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -106,9 +85,7 @@ func writeJSON(w http.ResponseWriter, body any) {
 	_, _ = w.Write(b)
 }
 
-// errorStatusFor returns the conventional HTTP status code for an ErrorCode.
-// Used by the mock server when ForceError is set without a matching ForceStatus
-// so tests don't need to know the code→status mapping by heart.
+// Lets tests set ForceError without also knowing the code-to-status mapping.
 func errorStatusFor(code api.ErrorCode) int { //nolint:gocyclo // simple lookup table
 	switch code {
 	case api.CodeUnauthorized:

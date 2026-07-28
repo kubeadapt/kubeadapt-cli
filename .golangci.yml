@@ -95,6 +95,7 @@ linters:
         - name: error-strings
         - name: error-naming
         - name: exported
+          disabled: true  # Docs kept only where non-obvious; see CONTRIBUTING
         - name: increment-decrement
         - name: var-naming
         - name: package-comments

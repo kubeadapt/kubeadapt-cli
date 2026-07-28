@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
@@ -19,7 +17,6 @@ var getTeamsCmd = &cobra.Command{
   kubeadapt get teams --cost-mode workload_only
   kubeadapt get teams --department-id dept-123 --paginate`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
@@ -31,15 +28,12 @@ var getTeamsCmd = &cobra.Command{
 
 		deptIDs, _ := cmd.Flags().GetStringSlice("department-id")
 		origins, _ := cmd.Flags().GetStringSlice("origin")
+		if err := validateEnumSlice("origin", origins, originValues); err != nil {
+			return err
+		}
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
-		defer cancel()
-
-		var allItems []types.Team
-		var lastMeta *types.Meta
-		cursor := paged.Cursor
-		for {
-			f := api.TeamFilter{
+		fetch := func(ctx context.Context, cursor string) ([]types.Team, *types.Meta, error) {
+			return c.ListTeams(ctx, api.TeamFilter{
 				PagedOpts: api.PagedOpts{
 					Limit:        paged.Limit,
 					Cursor:       cursor,
@@ -48,39 +42,15 @@ var getTeamsCmd = &cobra.Command{
 				CostModeOpt:   api.CostModeOpt{CostMode: paged.CostMode},
 				DepartmentIDs: deptIDs,
 				Origins:       origins,
-			}
-			items, meta, err := c.ListTeams(ctx, f)
-			if err != nil {
-				return fmt.Errorf("list teams: %w", err)
-			}
-			allItems = append(allItems, items...)
-			lastMeta = meta
-			if !paged.Paginate || meta == nil || meta.Pagination == nil || !meta.Pagination.HasMore {
-				break
-			}
-			cursor = meta.Pagination.NextCursor
-			if cursor == "" {
-				break
-			}
+			})
 		}
-
-		outFmt := formatTable
-		if rctx != nil {
-			outFmt = rctx.OutputFmt
-		}
-		switch outFmt {
-		case formatJSON:
-			return output.RenderJSONWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		case formatYAML:
-			return output.RenderYAMLWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		default:
-			return output.RenderTeams(cmd.OutOrStdout(), allItems, lastMeta)
-		}
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeams)
 	},
 }
 
 func init() {
 	getTeamsCmd.Flags().StringSlice("department-id", nil, "Filter by department ID (repeatable)")
 	getTeamsCmd.Flags().StringSlice("origin", nil, "Filter by origin: k8s (auto-discovered from K8s labels) or kubeadapt (created in dashboard) (repeatable)")
+	registerEnumFlag(getTeamsCmd, "origin", originValues...)
 	getCmd.AddCommand(getTeamsCmd)
 }

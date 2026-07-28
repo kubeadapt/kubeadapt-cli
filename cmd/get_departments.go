@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
@@ -19,7 +17,6 @@ var getDepartmentsCmd = &cobra.Command{
   kubeadapt get departments --cost-mode workload_only
   kubeadapt get departments --origin kubeadapt --paginate`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
@@ -30,15 +27,12 @@ var getDepartmentsCmd = &cobra.Command{
 		}
 
 		origins, _ := cmd.Flags().GetStringSlice("origin")
+		if err := validateEnumSlice("origin", origins, originValues); err != nil {
+			return err
+		}
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
-		defer cancel()
-
-		var allItems []types.Department
-		var lastMeta *types.Meta
-		cursor := paged.Cursor
-		for {
-			f := api.DepartmentFilter{
+		fetch := func(ctx context.Context, cursor string) ([]types.Department, *types.Meta, error) {
+			return c.ListDepartments(ctx, api.DepartmentFilter{
 				PagedOpts: api.PagedOpts{
 					Limit:        paged.Limit,
 					Cursor:       cursor,
@@ -46,38 +40,14 @@ var getDepartmentsCmd = &cobra.Command{
 				},
 				CostModeOpt: api.CostModeOpt{CostMode: paged.CostMode},
 				Origins:     origins,
-			}
-			items, meta, err := c.ListDepartments(ctx, f)
-			if err != nil {
-				return fmt.Errorf("list departments: %w", err)
-			}
-			allItems = append(allItems, items...)
-			lastMeta = meta
-			if !paged.Paginate || meta == nil || meta.Pagination == nil || !meta.Pagination.HasMore {
-				break
-			}
-			cursor = meta.Pagination.NextCursor
-			if cursor == "" {
-				break
-			}
+			})
 		}
-
-		outFmt := formatTable
-		if rctx != nil {
-			outFmt = rctx.OutputFmt
-		}
-		switch outFmt {
-		case formatJSON:
-			return output.RenderJSONWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		case formatYAML:
-			return output.RenderYAMLWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		default:
-			return output.RenderDepartments(cmd.OutOrStdout(), allItems, lastMeta)
-		}
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderDepartments)
 	},
 }
 
 func init() {
 	getDepartmentsCmd.Flags().StringSlice("origin", nil, "Filter by origin: k8s (auto-discovered from K8s labels) or kubeadapt (created in dashboard) (repeatable)")
+	registerEnumFlag(getDepartmentsCmd, "origin", originValues...)
 	getCmd.AddCommand(getDepartmentsCmd)
 }

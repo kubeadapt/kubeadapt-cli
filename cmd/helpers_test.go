@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -94,8 +95,54 @@ func TestParsePagedFlags_AcceptsValid(t *testing.T) {
 		Limit:        250,
 		Paginate:     true,
 		IncludeTotal: true,
+		MaxWait:      defaultMaxWait,
 	}
 	assert.Equal(t, want, got)
+}
+
+func TestParsePagedFlags_MaxWaitDefaultsWhenFlagAbsent(t *testing.T) {
+	get, err := executeGet(t, "dummy")
+	require.NoError(t, err)
+	got, err := parsePagedFlags(get)
+	require.NoError(t, err)
+	assert.Equal(t, defaultMaxWait, got.MaxWait)
+}
+
+func TestParsePagedFlags_MaxWait(t *testing.T) {
+	tests := []struct {
+		name    string
+		arg     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{name: "explicit duration", arg: "--max-wait=90s", want: 90 * time.Second},
+		{name: "zero means unbounded", arg: "--max-wait=0", want: 0},
+		{name: "negative rejected", arg: "--max-wait=-1s", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := newTestGetCmd()
+			get, _, err := root.Find([]string{"get"})
+			require.NoError(t, err)
+			get.PersistentFlags().Duration(flagMaxWait, defaultMaxWait, "")
+
+			root.SetArgs([]string{"get", tc.arg, "dummy"})
+			root.SetOut(&bytes.Buffer{})
+			root.SetErr(&bytes.Buffer{})
+
+			if tc.wantErr {
+				execErr := root.Execute()
+				require.Error(t, execErr, "a negative budget must be rejected before any request")
+				assert.Contains(t, execErr.Error(), "--max-wait")
+				return
+			}
+			require.NoError(t, root.Execute())
+
+			got, err := parsePagedFlags(get)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got.MaxWait)
+		})
+	}
 }
 
 func TestGetCmdRejectsInvalidCostModeAtPreRun(t *testing.T) {

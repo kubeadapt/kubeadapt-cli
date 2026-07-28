@@ -14,18 +14,34 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
 )
 
-func TestMockServer_OrganizationEnvelope(t *testing.T) {
-	ms := testutil.NewMockServer(t)
-
-	resp, err := http.Get(ms.URL + "/v1/organization")
+// getEnvelope issues a GET and decodes into the real production envelope type.
+// Decoding into types.Envelope[T] rather than a loose map is the point: it
+// proves the mock emits JSON the CLI can actually consume, so a drifted fixture
+// fails here instead of silently making every downstream test lie.
+func getEnvelope[T any](t *testing.T, url string) (types.Envelope[T], int) {
+	t.Helper()
+	resp, err := http.Get(url)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var env types.Envelope[types.Organization]
+	var env types.Envelope[T]
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
+	return env, resp.StatusCode
+}
 
+func requireErrorEnvelope(t *testing.T, url string, wantStatus int, wantCode string) {
+	t.Helper()
+	env, status := getEnvelope[map[string]any](t, url)
+	assert.Equal(t, wantStatus, status)
+	require.NotNil(t, env.Error)
+	assert.Equal(t, wantCode, env.Error.Code)
+}
+
+func TestMockServer_OrganizationEnvelope(t *testing.T) {
+	ms := testutil.NewMockServer(t)
+
+	env, status := getEnvelope[types.Organization](t, ms.URL+"/v1/organization")
+	require.Equal(t, http.StatusOK, status)
 	assert.Nil(t, env.Error)
 	assert.NotEmpty(t, env.Data.Metadata.Name)
 	assert.Equal(t, "USD", env.Data.Cost.CurrentRunRateHourly.Currency)
@@ -35,102 +51,75 @@ func TestMockServer_OrganizationEnvelope(t *testing.T) {
 func TestMockServer_ClustersListIsPaginated(t *testing.T) {
 	ms := testutil.NewMockServer(t)
 
-	resp, err := http.Get(ms.URL + "/v1/clusters")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	var env types.Envelope[[]types.Cluster]
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
+	env, status := getEnvelope[[]types.Cluster](t, ms.URL+"/v1/clusters")
+	assert.Equal(t, http.StatusOK, status)
 	assert.Len(t, env.Data, 3)
 	require.NotNil(t, env.Meta.Pagination)
 	assert.False(t, env.Meta.Pagination.HasMore)
 }
 
-func TestMockServer_RejectsCostModeOnClusters(t *testing.T) {
-	ms := testutil.NewMockServer(t)
-
-	resp, err := http.Get(ms.URL + "/v1/clusters?cost_mode=workload_only")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode)
-
-	var env types.Envelope[map[string]any]
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
-	require.NotNil(t, env.Error)
-	assert.Equal(t, string(api.CodeInvalidCostMode), env.Error.Code)
-}
-
-func TestMockServer_ClusterDetailMissingReturns404(t *testing.T) {
-	ms := testutil.NewMockServer(t)
-
-	resp, err := http.Get(ms.URL + "/v1/clusters/missing")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-
-	var env types.Envelope[map[string]any]
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
-	require.NotNil(t, env.Error)
-	assert.Equal(t, string(api.CodeClusterNotFound), env.Error.Code)
-}
-
 func TestMockServer_DashboardEchoesCostMode(t *testing.T) {
 	ms := testutil.NewMockServer(t)
 
-	resp, err := http.Get(ms.URL + "/v1/organization/dashboard?cost_mode=workload_only&top_clusters_limit=2")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	var env types.Envelope[types.OrganizationDashboard]
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
+	env, _ := getEnvelope[types.OrganizationDashboard](t,
+		ms.URL+"/v1/organization/dashboard?cost_mode=workload_only&top_clusters_limit=2")
 	assert.Equal(t, "workload_only", env.Meta.CostMode)
 	assert.Len(t, env.Data.TopClusters, 2)
 }
 
-func TestMockServer_RequireAPIKeyRejectsMissing(t *testing.T) {
-	ms := testutil.NewMockServer(t, testutil.WithAPIKey("secret-key"))
-
-	resp, err := http.Get(ms.URL + "/v1/organization")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+// The CLI's error-handling tests assert on these exact statuses and codes. If
+// the mock stops producing them those tests pass against nothing.
+func TestMockServer_RejectsCostModeOnClusters(t *testing.T) {
+	ms := testutil.NewMockServer(t)
+	requireErrorEnvelope(t, ms.URL+"/v1/clusters?cost_mode=workload_only",
+		http.StatusUnprocessableEntity, string(api.CodeInvalidCostMode))
 }
 
-func TestMockServer_RequireAPIKeyAcceptsBearer(t *testing.T) {
-	ms := testutil.NewMockServer(t, testutil.WithAPIKey("secret-key"))
-
-	req, _ := http.NewRequest(http.MethodGet, ms.URL+"/v1/organization", nil)
-	req.Header.Set("Authorization", "Bearer secret-key")
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+func TestMockServer_ClusterDetailMissingReturns404(t *testing.T) {
+	ms := testutil.NewMockServer(t)
+	requireErrorEnvelope(t, ms.URL+"/v1/clusters/missing",
+		http.StatusNotFound, string(api.CodeClusterNotFound))
 }
 
+func TestMockServer_RequireAPIKey(t *testing.T) {
+	tests := []struct {
+		name       string
+		bearer     string
+		wantStatus int
+	}{
+		{"absent key rejected", "", http.StatusUnauthorized},
+		{"bearer key accepted", "secret-key", http.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ms := testutil.NewMockServer(t, testutil.WithAPIKey("secret-key"))
+
+			req, err := http.NewRequest(http.MethodGet, ms.URL+"/v1/organization", nil)
+			require.NoError(t, err)
+			if tt.bearer != "" {
+				req.Header.Set("Authorization", "Bearer "+tt.bearer)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+		})
+	}
+}
+
+// cmd tests walk this cursor chain by hand (notably "page3" to reach a
+// zero-row page), so the endpoint-bound cursor contract has to hold here.
 func TestMockServer_PaginationViaCursor(t *testing.T) {
 	ms := testutil.NewMockServer(t)
 
-	resp, err := http.Get(ms.URL + "/v1/clusters?limit=2")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	var page1 types.Envelope[[]types.Cluster]
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&page1))
+	page1, _ := getEnvelope[[]types.Cluster](t, ms.URL+"/v1/clusters?limit=2")
 	assert.Len(t, page1.Data, 2)
 	require.NotNil(t, page1.Meta.Pagination)
 	assert.True(t, page1.Meta.Pagination.HasMore)
 	assert.Equal(t, "page2", page1.Meta.Pagination.NextCursor)
 
-	resp2, err := http.Get(ms.URL + "/v1/clusters?limit=2&cursor=page2")
-	require.NoError(t, err)
-	defer resp2.Body.Close()
-	var page2 types.Envelope[[]types.Cluster]
-	require.NoError(t, json.NewDecoder(resp2.Body).Decode(&page2))
+	page2, _ := getEnvelope[[]types.Cluster](t, ms.URL+"/v1/clusters?limit=2&cursor=page2")
 	assert.Len(t, page2.Data, 1)
 	require.NotNil(t, page2.Meta.Pagination)
 	assert.False(t, page2.Meta.Pagination.HasMore)
@@ -143,7 +132,6 @@ func TestMockServer_RateLimitFails(t *testing.T) {
 	resp, err := http.Get(ms.URL + "/v1/organization")
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	assert.Equal(t, "1", resp.Header.Get("Retry-After"))
 
@@ -153,6 +141,7 @@ func TestMockServer_RateLimitFails(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 }
 
+// /health is deliberately un-enveloped; the health command parses it raw.
 func TestMockServer_HealthIsUnenveloped(t *testing.T) {
 	ms := testutil.NewMockServer(t)
 

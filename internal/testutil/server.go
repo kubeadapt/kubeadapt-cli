@@ -12,59 +12,45 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// Common literal values reused across the route table. Centralized to satisfy
-// the goconst linter and to make wholesale renames a single-edit operation.
+// Centralized to satisfy goconst and make renames a single edit.
 const (
-	costModeDefault    = "fully_loaded"
-	missingPathValue   = "missing"
-	cursorPage2        = "page2"
-	cursorPage3        = "page3"
-	statusKey          = "status"
-	statusOK           = "ok"
+	costModeDefault  = "fully_loaded"
+	missingPathValue = "missing"
+	cursorPage2      = "page2"
+	cursorPage3      = "page3"
+	statusKey        = "status"
+	statusOK         = "ok"
 )
 
-// MockServer is an in-process httptest.Server preconfigured with every
-// kubeadapt-cli endpoint. Tests can mutate the behavior-control fields
-// (RequireAPIKey, ForceStatus, ForceError, RateLimitFails, RateLimitHeaders)
-// between requests to exercise error paths without re-creating the server.
-//
-// MockServer instances are safe for concurrent use by HTTP handlers because
-// every field read/write goes through the embedded mutex.
+// Behavior-control fields may be mutated between requests to exercise error
+// paths without re-creating the server. Safe for concurrent use: every field
+// access goes through the embedded mutex.
 type MockServer struct {
 	*httptest.Server
 
-	// URL is a convenience alias for Server.URL.
 	URL string
 
 	mu sync.Mutex
 
-	// RequireAPIKey, when set, causes the server to return 401 UNAUTHORIZED
-	// unless the client sends `Authorization: Bearer <RequireAPIKey>`.
+	// When set, returns 401 unless the request carries a matching bearer token.
 	RequireAPIKey string
 
-	// RateLimitHeaders are echoed on every response — useful for testing the
-	// client's RateLimit snapshot machinery.
+	// Echoed on every response.
 	RateLimitHeaders map[string]string
 
-	// ForceStatus, when non-zero, makes the next request return this HTTP
-	// status. The next-request flag is consumed after one use.
+	// Applies to the next request only, then is consumed.
 	ForceStatus int
 
-	// ForceError, when non-empty, makes the next request return an envelope
-	// error with this code (and a matching default HTTP status when
-	// ForceStatus is zero). Consumed after one use.
+	// Applies to the next request only. Picks a default status when ForceStatus
+	// is zero.
 	ForceError api.ErrorCode
 
-	// RateLimitFails, when > 0, makes the next N requests return 429
-	// RATE_LIMITED with Retry-After: 1. Decremented per request.
+	// Next N requests return 429 with Retry-After: 1. Decremented per request.
 	RateLimitFails int
 
-	// RequestLog captures every URL + headers seen, for assertion in tests.
 	RequestLog []RequestRecord
 }
 
-// RequestRecord captures the salient fields of every request the mock server
-// has seen, in the order they arrived.
 type RequestRecord struct {
 	Method        string
 	Path          string
@@ -72,19 +58,13 @@ type RequestRecord struct {
 	Authorization string
 }
 
-// Option configures a MockServer at construction time.
 type Option func(*MockServer)
 
-// WithAPIKey requires every incoming request to present the supplied bearer
-// token in the Authorization header. Requests without a matching token are
-// rejected with 401 UNAUTHORIZED.
 func WithAPIKey(key string) Option {
 	return func(ms *MockServer) { ms.RequireAPIKey = key }
 }
 
-// WithRateLimitHeaders attaches the supplied headers to every response. The
-// map is copied so subsequent mutations of the caller's map do not affect
-// the server.
+// The map is copied, so later caller mutations do not affect the server.
 func WithRateLimitHeaders(m map[string]string) Option {
 	return func(ms *MockServer) {
 		ms.RateLimitHeaders = make(map[string]string, len(m))
@@ -94,9 +74,7 @@ func WithRateLimitHeaders(m map[string]string) Option {
 	}
 }
 
-// NewMockServer starts an in-process HTTP server that responds to every
-// kubeadapt-cli endpoint with realistic envelope-shaped responses. The
-// server is registered with t.Cleanup so it is torn down automatically.
+// Registered with t.Cleanup, so teardown is automatic.
 func NewMockServer(t *testing.T, opts ...Option) *MockServer {
 	t.Helper()
 	ms := &MockServer{
@@ -112,7 +90,6 @@ func NewMockServer(t *testing.T, opts ...Option) *MockServer {
 	return ms
 }
 
-// Requests returns a copy of the request log. Safe for concurrent use.
 func (ms *MockServer) Requests() []RequestRecord {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -121,9 +98,7 @@ func (ms *MockServer) Requests() []RequestRecord {
 	return out
 }
 
-// wrap returns an http.HandlerFunc that applies the global behavior controls
-// (request logging, RateLimitHeaders echo, ForceStatus/ForceError/RateLimitFails,
-// RequireAPIKey) before dispatching to the supplied per-route handler.
+// Applies the global behavior controls before dispatching to the route handler.
 func (ms *MockServer) wrap(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ms.mu.Lock()
@@ -178,9 +153,8 @@ func (ms *MockServer) wrap(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// mux constructs the ServeMux with every supported route registered. Health
-// and OpenAPI routes are also wrapped so RateLimitHeaders + RequestLog still
-// apply to them (useful for tests that count traffic).
+// Health and OpenAPI routes are wrapped too, so RateLimitHeaders and RequestLog
+// still apply to tests that count traffic.
 func (ms *MockServer) mux() http.Handler {
 	m := http.NewServeMux()
 
@@ -224,8 +198,6 @@ func (ms *MockServer) mux() http.Handler {
 	return m
 }
 
-// resolveCostMode returns the cost_mode supplied via query string, or the
-// default ("fully_loaded") when absent.
 func resolveCostMode(q url.Values) string {
 	if cm := q.Get("cost_mode"); cm != "" {
 		return cm
@@ -233,9 +205,7 @@ func resolveCostMode(q url.Values) string {
 	return costModeDefault
 }
 
-// rejectCostMode writes a 422 INVALID_COST_MODE response and returns true
-// when the request includes a cost_mode= query parameter (including empty
-// values). The endpoint argument is interpolated into the error message.
+// Triggers on any cost_mode= parameter, including an empty value.
 func rejectCostMode(w http.ResponseWriter, r *http.Request, endpoint string) bool {
 	if r.URL.Query().Has("cost_mode") {
 		WriteError(w, http.StatusUnprocessableEntity, api.CodeInvalidCostMode,
@@ -246,20 +216,14 @@ func rejectCostMode(w http.ResponseWriter, r *http.Request, endpoint string) boo
 	return false
 }
 
-// metaWithCostMode returns a Meta block with cost_mode echoed from the request
-// query (or the default).
 func metaWithCostMode(r *http.Request) types.Meta {
 	m := defaultMeta()
 	m.CostMode = resolveCostMode(r.URL.Query())
 	return m
 }
 
-// paginate slices a fixture list according to the limit/cursor query and
-// returns the page plus the corresponding Pagination block. Cursors are the
-// deterministic strings "page2"/"page3" so tests can assert against them.
-//
-// The total_count field on Pagination is populated only when the caller
-// passes ?include_total=true.
+// Cursors are the fixed strings "page2"/"page3" so tests can assert on them.
+// total_count is populated only when ?include_total=true is passed.
 func paginate[T any](items []T, q url.Values) ([]T, types.Pagination) {
 	limit := 100
 	if l := q.Get("limit"); l != "" {

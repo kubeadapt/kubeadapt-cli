@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
 
 var getNodeCmd = &cobra.Command{
-	Use:   "node <node-uid>",
-	Short: "Show a node",
-	Long:  `Show details for a single node by k8s metadata.uid.`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "node <node-uid>",
+	Short:             "Show a node",
+	Long:              `Show details for a single node by k8s metadata.uid.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: firstArgOnly(completeNodeUIDs),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Flags().Changed("cost-mode") {
-			return fmt.Errorf("--cost-mode is not accepted by the node endpoint")
+		if err := rejectCostMode(cmd, api.EndpointNode); err != nil {
+			return err
 		}
 		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
