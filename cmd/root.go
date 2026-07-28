@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/config"
 	"github.com/kubeadapt/kubeadapt-cli/internal/logger"
+	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/kubeadapt/kubeadapt-cli/internal/update"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,7 @@ const (
 	groupUtility = "utility"
 )
 
-// Flag variables — still needed for cobra binding, but only used in PersistentPreRunE
+// Flag variables - still needed for cobra binding, but only used in PersistentPreRunE
 // to populate the RunContext. Commands access state via getRunContext(cmd).
 var (
 	cfgFile   string
@@ -30,21 +31,56 @@ var (
 	quiet     bool
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "kubeadapt",
-	Short: "Kubeadapt CLI - Kubernetes cost optimization",
-	Long: `Kubeadapt CLI provides command-line access to the Kubeadapt platform
+// The resolved path is printed rather than the precedence rules, because
+// DefaultPath picks between XDG, a legacy ~/.kubeadapt, and os.UserConfigDir
+// depending on what already exists, and only one of those is true per machine.
+func configPathForHelp() string {
+	if p := config.DefaultPath(); p != "" {
+		return p
+	}
+	return "the platform config directory"
+}
+
+// Derived from config.Default() rather than restated, so the advertised
+// endpoint cannot drift away from the one the CLI actually dials.
+var rootLong = fmt.Sprintf(`Kubeadapt CLI provides command-line access to the Kubeadapt platform
 for Kubernetes cost optimization, resource management, and recommendations.
 
 Environment variables:
-  KUBEADAPT_API_URL   Override the API endpoint (default: https://api.kubeadapt.io)
+  KUBEADAPT_API_URL   Override the API endpoint (default: %s)
   KUBEADAPT_API_KEY   Provide the API key (overrides config file)
+  NO_COLOR            Any non-empty value disables colored output
+  KUBEADAPT_NO_UPDATE_CHECK  Any non-empty value disables the update check
 
-Configuration is stored in ~/.kubeadapt/config.yaml (or $XDG_CONFIG_HOME/kubeadapt/config.yaml).
-Use 'kubeadapt auth login' to authenticate.`,
+Configuration lives at %s on this machine; the full lookup order is in the README.
+Use 'kubeadapt auth login' to authenticate.`, config.Default().APIURL, configPathForHelp())
+
+func validateOutputFmt(format string) error {
+	switch format {
+	case formatTable, formatJSON, formatYAML:
+		return nil
+	}
+	return usagef("invalid --output %q (must be one of: %s, %s, %s)",
+		format, formatTable, formatJSON, formatYAML)
+}
+
+var rootCmd = &cobra.Command{
+	Use:           "kubeadapt",
+	Short:         "Kubeadapt CLI - Kubernetes cost optimization",
+	Long:          rootLong,
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Presentation flags are resolved ahead of the early return below,
+		// because login/version/completion still accept and honor them.
+		if err := validateOutputFmt(outputFmt); err != nil {
+			return err
+		}
+		// https://no-color.org - any non-empty value disables color.
+		colorDisabled := noColor || os.Getenv("NO_COLOR") != ""
+		output.SetNoColor(colorDisabled)
+		output.SetQuiet(quiet)
+
 		if cmd.Name() == "login" || cmd.Name() == "version" || cmd.Name() == "completion" {
 			return nil
 		}
@@ -67,7 +103,7 @@ Use 'kubeadapt auth login' to authenticate.`,
 			Config:    cfg,
 			Logger:    log,
 			OutputFmt: outputFmt,
-			NoColor:   noColor,
+			NoColor:   colorDisabled,
 			Verbose:   verbose,
 			Quiet:     quiet,
 		}
@@ -77,37 +113,45 @@ Use 'kubeadapt auth login' to authenticate.`,
 	},
 }
 
-// Execute runs the root command with proper error handling.
 func Execute() {
+	if code := run(os.Stderr); code != exitOK {
+		os.Exit(code)
+	}
+}
+
+// Everything except the os.Exit, so tests exercise the same wiring the binary
+// does. markUsageErrors runs here rather than in an init: sibling init
+// functions are what register the subcommands, and their order is not fixed.
+func run(w io.Writer) int {
+	markUsageErrors(rootCmd)
 	err := rootCmd.Execute()
 
-	// Sync logger if it was initialized
 	if rc := getRunContext(rootCmd); rc != nil && rc.Logger != nil {
 		_ = rc.Logger.Sync()
 	}
 
-	if updateMsg := update.CheckForUpdate(); updateMsg != "" {
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, updateMsg)
+	return report(w, err, update.CheckForUpdate)
+}
+
+// The upgrade banner is emitted after the failure, so a failed run ends on its
+// own error rather than on an unrelated nag. banner is injected so the ordering
+// stays assertable without a terminal.
+func report(w io.Writer, err error, banner func() string) int {
+	if err != nil {
+		fmt.Fprintf(w, "Error: %s\n", friendlyError(err))
+		if !verbose {
+			fmt.Fprintln(w, "  Use --verbose for more details.")
+		}
 	}
 
-	if err == nil {
-		return
+	if !quiet {
+		if msg := banner(); msg != "" {
+			fmt.Fprintln(w, "")
+			fmt.Fprintln(w, msg)
+		}
 	}
 
-	// FlagError → show usage + exit 2
-	if flagErr, ok := errors.AsType[*FlagError](err); ok {
-		fmt.Fprintf(os.Stderr, "Error: %s\n\n", flagErr.Err)
-		// Don't print usage for the root command (too verbose), only for subcommands
-		os.Exit(2)
-	}
-
-	// All other errors → friendly message + exit 1
-	fmt.Fprintf(os.Stderr, "Error: %s\n", friendlyError(err))
-	if !verbose {
-		fmt.Fprintln(os.Stderr, "  Use --verbose for more details.")
-	}
-	os.Exit(1)
+	return exitCodeFor(err)
 }
 
 func init() {
@@ -118,6 +162,13 @@ func init() {
 	)
 
 	rootCmd.AddCommand(newHealthCmd())
+
+	// Inherited by every subcommand via Command.FlagErrorFunc, so an unknown
+	// flag or an unparseable flag value lands on the same exit code as the
+	// validators below instead of being reported as a runtime failure.
+	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return asUsageError(err)
+	})
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.kubeadapt/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "Kubeadapt API URL")

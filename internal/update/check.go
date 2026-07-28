@@ -11,12 +11,16 @@ import (
 	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/version"
+	"golang.org/x/term"
 )
 
 const (
 	releaseURL    = "https://api.github.com/repos/kubeadapt/kubeadapt-cli/releases/latest"
 	cacheDuration = 24 * time.Hour
 	cacheFile     = "update-check.json"
+
+	envNoUpdateCheck = "KUBEADAPT_NO_UPDATE_CHECK"
+	envCI            = "CI"
 )
 
 type cachedCheck struct {
@@ -32,10 +36,8 @@ func cacheDir() string {
 	return filepath.Join(home, ".cache", "kubeadapt")
 }
 
-// isNewer reports whether latest is a strictly newer semver than current.
-// Pre-release and build-metadata suffixes are ignored. Returns false when
-// either version is empty or unparseable so the upgrade prompt fails closed
-// and never nags the user about an unverifiable "upgrade".
+// Ignores pre-release and build metadata. Returns false on empty or unparseable
+// input so the upgrade prompt fails closed rather than nagging.
 func isNewer(latest, current string) bool {
 	l, ok := parseSemver(latest)
 	if !ok {
@@ -73,8 +75,30 @@ func parseSemver(s string) ([3]int, bool) {
 	return out, true
 }
 
+// The check is a synchronous 3s network call on the hot path, and GitHub's
+// unauthenticated API is rate limited per IP, so a shared CI egress address
+// gets 403s. Passing the inputs in keeps the decision testable without a TTY.
+func shouldSkip(noUpdateCheck, ci string, stdoutIsTerminal bool) bool {
+	return noUpdateCheck != "" || ci != "" || !stdoutIsTerminal
+}
+
+// ShouldSkip reports whether the update check must be suppressed: an explicit
+// opt-out, a CI run, or output that is not a terminal (piped or redirected),
+// where an upgrade nag has no reader.
+func ShouldSkip() bool {
+	return shouldSkip(
+		os.Getenv(envNoUpdateCheck),
+		os.Getenv(envCI),
+		term.IsTerminal(int(os.Stdout.Fd())),
+	)
+}
+
 func CheckForUpdate() string {
-	if version.Version == "dev" {
+	return checkForUpdate(ShouldSkip())
+}
+
+func checkForUpdate(skip bool) string {
+	if version.Version == "dev" || skip {
 		return ""
 	}
 
@@ -83,7 +107,7 @@ func CheckForUpdate() string {
 		var cached cachedCheck
 		if json.Unmarshal(data, &cached) == nil && time.Since(cached.CheckedAt) < cacheDuration {
 			if isNewer(cached.LatestVersion, version.Version) {
-				return fmt.Sprintf("A new version of kubeadapt is available: %s → %s\n  Update with: brew upgrade kubeadapt", version.Version, cached.LatestVersion)
+				return upgradeMessage(version.Version, cached.LatestVersion)
 			}
 			return ""
 		}
@@ -113,7 +137,16 @@ func CheckForUpdate() string {
 	_ = os.WriteFile(cachePath, cacheData, 0600)
 
 	if isNewer(latest, version.Version) {
-		return fmt.Sprintf("A new version of kubeadapt is available: %s → %s\n  Update with: brew upgrade kubeadapt", version.Version, release.TagName)
+		return upgradeMessage(version.Version, latest)
 	}
 	return ""
+}
+
+// upgradeMessage normalizes the tag before rendering so the cached path and
+// the freshly-fetched path can't disagree on whether to show a "v" prefix.
+func upgradeMessage(current, latest string) string {
+	return fmt.Sprintf(
+		"A new version of kubeadapt is available: %s -> %s\n  Update with: brew upgrade kubeadapt",
+		strings.TrimPrefix(current, "v"), strings.TrimPrefix(latest, "v"),
+	)
 }

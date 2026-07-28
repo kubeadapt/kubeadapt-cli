@@ -14,10 +14,6 @@ import (
 // top-N cluster slice size. 0 means "use server default" (currently 5).
 const flagTopClustersLimit = "top-clusters-limit"
 
-// getDashboardCmd registers the `get dashboard` subcommand which calls
-// GET /v1/organization/dashboard on the Kubeadapt public API. It honors
-// the persistent --cost-mode flag from getCmd (via parsePagedFlags) and a
-// local --top-clusters-limit flag that bounds the top-clusters slice.
 var getDashboardCmd = &cobra.Command{
 	Use:   "dashboard",
 	Short: "Show organization dashboard",
@@ -33,11 +29,8 @@ recommendations, top clusters, and savings summary. Accepts --cost-mode and
 		if rctx == nil {
 			return fmt.Errorf("failed to get run context")
 		}
-		client, err := newAPIClientFromCmd(cmd)
-		if err != nil {
-			return err
-		}
-
+		// Ahead of the client, so a mistyped flag reports itself as a usage
+		// error rather than being masked by a missing-credentials failure.
 		paged, err := parsePagedFlags(cmd)
 		if err != nil {
 			return err
@@ -47,7 +40,12 @@ recommendations, top clusters, and savings summary. Accepts --cost-mode and
 			return fmt.Errorf("read %s: %w", flagTopClustersLimit, err)
 		}
 		if topLimit < 0 || topLimit > 20 {
-			return fmt.Errorf("invalid --%s %d (must be 0..20; 0 means server default)", flagTopClustersLimit, topLimit)
+			return usagef("invalid --%s %d (must be 0..20; 0 means server default)", flagTopClustersLimit, topLimit)
+		}
+
+		client, err := newAPIClientFromCmd(cmd)
+		if err != nil {
+			return err
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
