@@ -1,6 +1,8 @@
 # Go build artifacts
 build/
 bin/
+# `go build ./cmd/kubeadapt` drops the binary in the repo root
+/kubeadapt
 *.exe
 *.exe~
 *.dll
@@ -25,7 +27,6 @@ go.work
 .env.local
 .env.*.local
 
-# Claude Code per-service instructions (gitignored, local only)
 CLAUDE.md
 
 # IDE
