@@ -11,9 +11,10 @@ import (
 )
 
 var getTeamCmd = &cobra.Command{
-	Use:   "team <team-id>",
-	Short: "Show a team",
-	Args:  cobra.ExactArgs(1),
+	Use:               "team <team-id>",
+	Short:             "Show a team",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: firstArgOnly(completeTeamIDs),
 	Example: `  kubeadapt get team team-abc-123
   kubeadapt get team team-abc-123 --cost-mode workload_only`,
 	RunE: func(cmd *cobra.Command, args []string) error {

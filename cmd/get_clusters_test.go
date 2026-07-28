@@ -29,7 +29,7 @@ func setupTestContext(t *testing.T, serverURL, key, format string) context.Conte
 	// live on getCmd. When tests call getClustersCmd.RunE directly they bypass
 	// the parent's flag inheritance, so parsePagedFlags fails with "flag not
 	// defined". Bind the parent's persistent flag set here so direct RunE calls
-	// see the defaults. Safe to call multiple times — cobra dedupes by name.
+	// see the defaults. Safe to call multiple times - cobra dedupes by name.
 	if getClustersCmd.Flags().Lookup(flagCostMode) == nil {
 		getClustersCmd.Flags().AddFlagSet(getCmd.PersistentFlags())
 	}

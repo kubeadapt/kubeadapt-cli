@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
@@ -22,10 +20,9 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
   kubeadapt get recommendations --recommendation-type workload_rightsizing --risk-level low
   kubeadapt get recommendations --min-savings-hourly 0.10 --paginate`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		if cmd.Flags().Changed("cost-mode") {
-			return fmt.Errorf("--cost-mode is not accepted by the recommendations endpoint")
+		if err := rejectCostMode(cmd, api.EndpointRecommendations); err != nil {
+			return err
 		}
-		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
@@ -45,14 +42,8 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
 		workloadUIDs, _ := cmd.Flags().GetStringSlice("workload-uid")
 		minSavings, _ := cmd.Flags().GetString("min-savings-hourly")
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), 60*time.Second)
-		defer cancel()
-
-		var allItems []types.Recommendation
-		var lastMeta *types.Meta
-		cursor := paged.Cursor
-		for {
-			f := api.RecommendationFilter{
+		fetch := func(ctx context.Context, cursor string) ([]types.Recommendation, *types.Meta, error) {
+			return c.ListRecommendations(ctx, api.RecommendationFilter{
 				PagedOpts: api.PagedOpts{
 					Limit:        paged.Limit,
 					Cursor:       cursor,
@@ -67,47 +58,28 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
 				ResourceType:       resType,
 				WorkloadUIDs:       workloadUIDs,
 				MinSavingsHourly:   minSavings,
-			}
-			items, meta, err := c.ListRecommendations(ctx, f)
-			if err != nil {
-				return fmt.Errorf("list recommendations: %w", err)
-			}
-			allItems = append(allItems, items...)
-			lastMeta = meta
-			if !paged.Paginate || meta == nil || meta.Pagination == nil || !meta.Pagination.HasMore {
-				break
-			}
-			cursor = meta.Pagination.NextCursor
-			if cursor == "" {
-				break
-			}
+			})
 		}
-
-		outFmt := formatTable
-		if rctx != nil {
-			outFmt = rctx.OutputFmt
-		}
-		switch outFmt {
-		case formatJSON:
-			return output.RenderJSONWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		case formatYAML:
-			return output.RenderYAMLWithMeta(cmd.OutOrStdout(), allItems, lastMeta)
-		default:
-			return output.RenderRecommendations(cmd.OutOrStdout(), allItems, lastMeta)
-		}
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderRecommendations)
 	},
 }
 
 func init() {
 	f := getRecommendationsCmd.Flags()
-	f.StringSlice("cluster-id", nil, "Filter by cluster ID (repeatable)")
+	f.StringSlice("cluster-id", nil, clusterIDFilterUsage)
 	f.StringSlice("namespace", nil, "Filter by namespace (repeatable)")
-	f.String("recommendation-type", "", "workload_rightsizing")
-	f.String("status", "", "pending|applied|dismissed|archived")
-	f.String("risk-level", "", "low|medium|high")
-	f.String("priority", "", "high|medium|low")
-	f.String("resource-type", "", "Deployment|StatefulSet|DaemonSet|Pod|Node")
+	f.String("recommendation-type", "", "Filter by recommendation type (workload_rightsizing)")
+	f.String("status", "", "Filter by status (pending|applied|dismissed|archived)")
+	f.String("risk-level", "", "Filter by risk level (low|medium|high)")
+	f.String("priority", "", "Filter by priority (low|medium|high)")
+	f.String("resource-type", "", "Filter by resource type (Deployment|StatefulSet|DaemonSet|Pod|Node)")
 	f.StringSlice("workload-uid", nil, "Filter by workload UID (repeatable)")
 	f.String("min-savings-hourly", "", "Minimum hourly savings (decimal)")
+	registerClusterIDFlag(getRecommendationsCmd)
+	registerEnumFlag(getRecommendationsCmd, "recommendation-type", "workload_rightsizing")
+	registerEnumFlag(getRecommendationsCmd, "status", "pending", "applied", "dismissed", "archived")
+	registerEnumFlag(getRecommendationsCmd, "risk-level", "low", "medium", "high")
+	registerEnumFlag(getRecommendationsCmd, "priority", "low", "medium", "high")
+	registerEnumFlag(getRecommendationsCmd, "resource-type", "Deployment", "StatefulSet", "DaemonSet", "Pod", "Node")
 	getCmd.AddCommand(getRecommendationsCmd)
 }

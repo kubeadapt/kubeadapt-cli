@@ -10,12 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// getWorkloadCmd fetches a single workload by its Kubernetes metadata.uid.
 var getWorkloadCmd = &cobra.Command{
-	Use:   "workload <workload-uid>",
-	Short: "Show a workload",
-	Long:  `Show details for a single workload by k8s metadata.uid.`,
-	Args:  cobra.ExactArgs(1),
+	Use:               "workload <workload-uid>",
+	Short:             "Show a workload",
+	Long:              `Show details for a single workload by k8s metadata.uid.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: firstArgOnly(completeWorkloadUIDs),
 	Example: `  kubeadapt get workload 11111111-2222-3333-4444-555555555555
   kubeadapt get workload 11111111-... --cost-mode workload_only -o yaml`,
 	RunE: func(cmd *cobra.Command, args []string) error {

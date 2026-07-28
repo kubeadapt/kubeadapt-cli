@@ -25,12 +25,9 @@ var getNamespaceCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		clusterID, err := cmd.Flags().GetString("cluster-id")
+		clusterID, err := singleClusterID(cmd)
 		if err != nil {
 			return err
-		}
-		if clusterID == "" {
-			return fmt.Errorf("--cluster-id is required")
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
@@ -59,7 +56,8 @@ var getNamespaceCmd = &cobra.Command{
 }
 
 func init() {
-	getNamespaceCmd.Flags().String("cluster-id", "", "Cluster ID that owns the namespace (required)")
+	getNamespaceCmd.Flags().StringSlice("cluster-id", nil, "Cluster ID that owns the namespace (required, exactly one)")
 	_ = getNamespaceCmd.MarkFlagRequired("cluster-id")
+	registerClusterIDFlag(getNamespaceCmd)
 	getCmd.AddCommand(getNamespaceCmd)
 }

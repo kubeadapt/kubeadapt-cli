@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
 
-// getOverviewCmd registers the `get overview` subcommand which calls
-// GET /v1/organization on the Kubeadapt public API and renders the
-// tenant-level snapshot (capacity, utilization, costs, run-rate).
 var getOverviewCmd = &cobra.Command{
 	Use:   "overview",
 	Short: "Show organization overview",
@@ -20,8 +18,8 @@ var getOverviewCmd = &cobra.Command{
   kubeadapt get overview -o json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		if cmd.Flags().Changed(flagCostMode) {
-			return fmt.Errorf("--cost-mode is not accepted by the organization endpoint")
+		if err := rejectCostMode(cmd, api.EndpointOrganization); err != nil {
+			return err
 		}
 		rctx := getRunContext(cmd)
 		if rctx == nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -15,20 +16,17 @@ var getNodeGroupCmd = &cobra.Command{
 	Long:  `Show details for a single node group by name within a cluster. Requires --cluster-id.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Flags().Changed("cost-mode") {
-			return fmt.Errorf("--cost-mode is not accepted by the node-group endpoint")
+		if err := rejectCostMode(cmd, api.EndpointNodeGroup); err != nil {
+			return err
 		}
 		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
 			return err
 		}
-		clusterID, err := cmd.Flags().GetString("cluster-id")
+		clusterID, err := singleClusterID(cmd)
 		if err != nil {
 			return err
-		}
-		if clusterID == "" {
-			return fmt.Errorf("--cluster-id is required")
 		}
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
@@ -53,7 +51,8 @@ var getNodeGroupCmd = &cobra.Command{
 }
 
 func init() {
-	getNodeGroupCmd.Flags().String("cluster-id", "", "Cluster ID that owns the node group (required)")
+	getNodeGroupCmd.Flags().StringSlice("cluster-id", nil, "Cluster ID that owns the node group (required, exactly one)")
 	_ = getNodeGroupCmd.MarkFlagRequired("cluster-id")
+	registerClusterIDFlag(getNodeGroupCmd)
 	getCmd.AddCommand(getNodeGroupCmd)
 }

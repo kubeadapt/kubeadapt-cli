@@ -3,14 +3,14 @@ package testutil
 import "github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 
 // Deterministic UUIDs and timestamps used across fixtures. Tests can match on
-// these literal values; do NOT swap them for time.Now() or uuid.New() — every
+// these literal values; do NOT swap them for time.Now() or uuid.New() - every
 // fixture must produce byte-identical output across runs.
 const (
 	clusterIDProd    = "00000000-0000-0000-0000-000000000001"
 	clusterIDStaging = "00000000-0000-0000-0000-000000000002"
 	clusterIDDev     = "00000000-0000-0000-0000-000000000003"
 
-	workloadUIDAPI       = "11111111-1111-1111-1111-000000000001"
+	workloadUIDAPI        = "11111111-1111-1111-1111-000000000001"
 	workloadUIDPrometheus = "11111111-1111-1111-1111-000000000002"
 	workloadUIDETL        = "11111111-1111-1111-1111-000000000003"
 
@@ -71,8 +71,6 @@ func money(amount string) types.Money {
 
 func stringPtr(s string) *string { return &s }
 
-// SampleCluster returns a single deterministic Cluster fixture (the production
-// cluster). Use SampleClusters() for the list endpoint.
 func SampleCluster() types.Cluster {
 	return types.Cluster{
 		ID:   clusterIDProd,
@@ -117,8 +115,6 @@ func SampleCluster() types.Cluster {
 	}
 }
 
-// SampleClusters returns a deterministic slice of three Cluster fixtures
-// (production, staging, dev) used by the list endpoint and pagination tests.
 func SampleClusters() []types.Cluster {
 	prod := SampleCluster()
 
@@ -137,8 +133,6 @@ func SampleClusters() []types.Cluster {
 	return []types.Cluster{prod, staging, dev}
 }
 
-// SampleWorkload returns a single Workload fixture (the api-gateway deployment
-// in the production cluster).
 func SampleWorkload() types.Workload {
 	return types.Workload{
 		ID:   workloadUIDAPI,
@@ -175,8 +169,6 @@ func SampleWorkload() types.Workload {
 	}
 }
 
-// SampleWorkloads returns three Workload fixtures across multiple namespaces
-// and workload kinds.
 func SampleWorkloads() []types.Workload {
 	apiGateway := SampleWorkload()
 
@@ -199,7 +191,6 @@ func SampleWorkloads() []types.Workload {
 	return []types.Workload{apiGateway, prometheus, etl}
 }
 
-// SamplePod returns a single Pod fixture from the api-gateway workload.
 func SamplePod() types.Pod {
 	return types.Pod{
 		ID:   podUIDOne,
@@ -245,7 +236,6 @@ func SamplePod() types.Pod {
 	}
 }
 
-// SamplePods returns five deterministic Pod fixtures with distinct UIDs.
 func SamplePods() []types.Pod {
 	base := SamplePod()
 	uids := []string{podUIDOne, podUIDTwo, podUIDThree, podUIDFour, podUIDFive}
@@ -259,7 +249,6 @@ func SamplePods() []types.Pod {
 	return out
 }
 
-// SampleNode returns a single Node fixture (on-demand m5.xlarge in us-east-1a).
 func SampleNode() types.Node {
 	return types.Node{
 		ID:   nodeUIDOne,
@@ -305,8 +294,6 @@ func SampleNode() types.Node {
 	}
 }
 
-// SampleNodes returns three Node fixtures: an on-demand m5.xlarge, a spot
-// c5.2xlarge (with the on-demand baseline populated), and a second on-demand.
 func SampleNodes() []types.Node {
 	first := SampleNode()
 
@@ -334,8 +321,6 @@ func SampleNodes() []types.Node {
 	return []types.Node{first, spot, third}
 }
 
-// SampleNodeGroup returns a single NodeGroup fixture for the general-purpose
-// pool. Includes the embedded member-node detail (Nodes slice) populated.
 func SampleNodeGroup() types.NodeGroup {
 	spotSavings := money("0.2200")
 	return types.NodeGroup{
@@ -370,8 +355,6 @@ func SampleNodeGroup() types.NodeGroup {
 	}
 }
 
-// SampleNodeGroups returns two NodeGroup fixtures: general-purpose and
-// compute-optimized.
 func SampleNodeGroups() []types.NodeGroup {
 	first := SampleNodeGroup()
 
@@ -385,8 +368,6 @@ func SampleNodeGroups() []types.NodeGroup {
 	return []types.NodeGroup{first, second}
 }
 
-// SampleNamespace returns a single Namespace fixture (default, in production
-// cluster) with the top-5 workload embed populated.
 func SampleNamespace() types.Namespace {
 	quotaCPU := types.NamespaceCapacityCPU{QuotaCores: 16.0}
 	quotaMem := types.NamespaceCapacityMemory{QuotaBytes: 34359738368}
@@ -432,7 +413,6 @@ func SampleNamespace() types.Namespace {
 	}
 }
 
-// SampleNamespaces returns two Namespace fixtures (default and monitoring).
 func SampleNamespaces() []types.Namespace {
 	first := SampleNamespace()
 
@@ -448,8 +428,6 @@ func SampleNamespaces() []types.Namespace {
 	return []types.Namespace{first, second}
 }
 
-// SampleRecommendation returns a single Recommendation fixture — a CPU
-// right-size proposal for the api-gateway workload.
 func SampleRecommendation() types.Recommendation {
 	return types.Recommendation{
 		ID:   recIDOne,
@@ -491,7 +469,6 @@ func SampleRecommendation() types.Recommendation {
 	}
 }
 
-// SampleRecommendations returns three Recommendation fixtures.
 func SampleRecommendations() []types.Recommendation {
 	first := SampleRecommendation()
 
@@ -516,7 +493,6 @@ func SampleRecommendations() []types.Recommendation {
 	return []types.Recommendation{first, second, third}
 }
 
-// SampleTeam returns a single Team fixture (the platform team).
 func SampleTeam() types.Team {
 	return types.Team{
 		ID:   teamIDPlatform,
@@ -540,7 +516,6 @@ func SampleTeam() types.Team {
 	}
 }
 
-// SampleTeams returns two Team fixtures (platform and sre).
 func SampleTeams() []types.Team {
 	first := SampleTeam()
 
@@ -556,7 +531,6 @@ func SampleTeams() []types.Team {
 	return []types.Team{first, second}
 }
 
-// SampleDepartment returns a single Department fixture (engineering).
 func SampleDepartment() types.Department {
 	return types.Department{
 		ID:   deptIDEngineering,
@@ -579,7 +553,6 @@ func SampleDepartment() types.Department {
 	}
 }
 
-// SampleDepartments returns two Department fixtures (engineering and data).
 func SampleDepartments() []types.Department {
 	first := SampleDepartment()
 
@@ -596,9 +569,6 @@ func SampleDepartments() []types.Department {
 	return []types.Department{first, second}
 }
 
-// SampleOrganization returns the Organization fixture used by GET
-// /v1/organization. Counts and rollups are populated to match the cluster
-// fixtures so dashboards stay consistent.
 func SampleOrganization() types.Organization {
 	return types.Organization{
 		ID:   orgID,
@@ -632,9 +602,6 @@ func SampleOrganization() types.Organization {
 	}
 }
 
-// SampleOrganizationDashboard returns the OrganizationDashboard fixture used
-// by GET /v1/organization/dashboard. TopClusters is populated with five
-// entries so tests can exercise the top_clusters_limit query parameter.
 func SampleOrganizationDashboard() types.OrganizationDashboard {
 	return types.OrganizationDashboard{
 		OrganizationID: orgID,
@@ -682,8 +649,6 @@ func SampleOrganizationDashboard() types.OrganizationDashboard {
 	}
 }
 
-// SampleTeamAssignment returns a single TeamAssignment fixture binding the
-// platform team to a namespace.
 func SampleTeamAssignment() types.TeamAssignment {
 	return types.TeamAssignment{
 		ID:   assignmentIDOne,
@@ -704,8 +669,6 @@ func SampleTeamAssignment() types.TeamAssignment {
 	}
 }
 
-// SampleTeamAssignments returns three TeamAssignment fixtures across
-// namespace, workload, and cluster entity types.
 func SampleTeamAssignments() []types.TeamAssignment {
 	first := SampleTeamAssignment()
 
