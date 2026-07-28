@@ -47,12 +47,23 @@ const (
 
 var detailHeaders = []string{colField, colValue}
 
-var noColor bool
+var (
+	noColor bool
+	quiet   bool
+)
 
-// SetNoColor toggles whether table styling emits ANSI color codes. cmd/*
-// flips this from the --no-color global flag at root command bind time.
+// SetNoColor toggles ANSI styling for every renderer in this package. The sole
+// production caller is cmd/root.go's PersistentPreRunE, which folds together the
+// --no-color flag and the NO_COLOR environment variable.
 func SetNoColor(v bool) {
 	noColor = v
+}
+
+// SetQuiet suppresses non-essential chrome - currently the descriptive part of
+// the pagination footer. Wired from the same place as SetNoColor, off the
+// --quiet flag. Correctness-relevant output is never suppressed.
+func SetQuiet(v bool) {
+	quiet = v
 }
 
 func newTable(headers []string, rows [][]string) *table.Table {
@@ -98,6 +109,11 @@ func writeTable(w io.Writer, headers []string, rows [][]string) error {
 
 func writeFooter(w io.Writer, itemsShown int, meta *types.Meta) error {
 	footer := PaginationFooter(itemsShown, meta)
+	if quiet {
+		// --quiet drops the descriptive footer but never the cursor: that line
+		// is the only signal a scripted run has that results were truncated.
+		footer = PaginationCursorHint(meta)
+	}
 	if footer == "" {
 		return nil
 	}
@@ -157,6 +173,17 @@ func styledPriority(p string) string {
 	}
 }
 
+func styledBool(v bool) string {
+	s := formatBool(v)
+	if noColor {
+		return s
+	}
+	if v {
+		return StyleSuccess.Render(s)
+	}
+	return StyleError.Render(s)
+}
+
 func joinList(items []string, max int) string {
 	if len(items) == 0 {
 		return noValue
@@ -167,25 +194,20 @@ func joinList(items []string, max int) string {
 	return strings.Join(items[:max], ",") + fmt.Sprintf(" (+%d)", len(items)-max)
 }
 
-// RenderClusters writes a list table of clusters plus a pagination footer.
-func RenderClusters(w io.Writer, items []types.Cluster, meta *types.Meta) error {
+func renderList[T any](
+	w io.Writer,
+	items []T,
+	meta *types.Meta,
+	emptyMsg string,
+	headers []string,
+	row func(T) []string,
+) error {
 	if len(items) == 0 {
-		return writeEmpty(w, "No clusters found.")
+		return writeEmpty(w, emptyMsg)
 	}
-	headers := []string{colID, colName, "Provider", colRegion, "Environment", lblStatus, "CPU%", "Mem%", colDollarHr}
 	rows := make([][]string, 0, len(items))
-	for _, c := range items {
-		rows = append(rows, []string{
-			c.ID,
-			c.Metadata.Name,
-			formatStr(c.Metadata.Provider),
-			formatStr(c.Metadata.Region),
-			formatStr(c.Metadata.Environment),
-			styledStatus(c.Metadata.Status),
-			FormatPercentage(c.Utilization.CPU.UtilizationPercent),
-			FormatPercentage(c.Utilization.Memory.UtilizationPercent),
-			FormatMoney(c.Cost.CurrentRunRateHourly),
-		})
+	for _, item := range items {
+		rows = append(rows, row(item))
 	}
 	if err := writeTable(w, headers, rows); err != nil {
 		return err
@@ -193,7 +215,24 @@ func RenderClusters(w io.Writer, items []types.Cluster, meta *types.Meta) error 
 	return writeFooter(w, len(items), meta)
 }
 
-// RenderCluster writes a detail key-value table for one cluster.
+func RenderClusters(w io.Writer, items []types.Cluster, meta *types.Meta) error {
+	return renderList(w, items, meta, "No clusters found.",
+		[]string{colID, colName, "Provider", colRegion, "Environment", lblStatus, "CPU%", "Mem%", colDollarHr},
+		func(c types.Cluster) []string {
+			return []string{
+				c.ID,
+				c.Metadata.Name,
+				formatStr(c.Metadata.Provider),
+				formatStr(c.Metadata.Region),
+				formatStr(c.Metadata.Environment),
+				styledStatus(c.Metadata.Status),
+				FormatPercentage(c.Utilization.CPU.UtilizationPercent),
+				FormatPercentage(c.Utilization.Memory.UtilizationPercent),
+				FormatMoney(c.Cost.CurrentRunRateHourly),
+			}
+		})
+}
+
 func RenderCluster(w io.Writer, c types.Cluster) error {
 	rows := [][]string{
 		{"ID", c.ID},
@@ -232,34 +271,25 @@ func RenderCluster(w io.Writer, c types.Cluster) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderWorkloads writes a list table of workloads plus a pagination footer.
 func RenderWorkloads(w io.Writer, items []types.Workload, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No workloads found.")
-	}
-	headers := []string{colID, colCluster, colNamespace, colName, colKind, "Replicas", "CPU req", "Mem req", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, item := range items {
-		replicas := fmt.Sprintf("%d/%d", item.Utilization.Replicas.Available, item.Utilization.Replicas.Desired)
-		rows = append(rows, []string{
-			item.ID,
-			formatStr(item.Metadata.Cluster.Name),
-			formatStr(item.Metadata.Namespace),
-			item.Metadata.Name,
-			formatStr(item.Metadata.WorkloadKind),
-			replicas,
-			FormatCores(item.Utilization.CPU.RequestedCores),
-			FormatBytes(item.Utilization.Memory.RequestedBytes),
-			FormatMoney(item.Cost.CurrentRunRateHourly),
+	return renderList(w, items, meta, "No workloads found.",
+		[]string{colID, colCluster, colNamespace, colName, colKind, "Replicas", "CPU req", "Mem req", colDollarHr},
+		func(item types.Workload) []string {
+			replicas := fmt.Sprintf("%d/%d", item.Utilization.Replicas.Available, item.Utilization.Replicas.Desired)
+			return []string{
+				item.ID,
+				formatStr(item.Metadata.Cluster.Name),
+				formatStr(item.Metadata.Namespace),
+				item.Metadata.Name,
+				formatStr(item.Metadata.WorkloadKind),
+				replicas,
+				FormatCores(item.Utilization.CPU.RequestedCores),
+				FormatBytes(item.Utilization.Memory.RequestedBytes),
+				FormatMoney(item.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderWorkload writes a detail key-value table for one workload.
 func RenderWorkload(w io.Writer, item types.Workload) error {
 	rows := [][]string{
 		{"ID", item.ID},
@@ -296,69 +326,44 @@ func RenderWorkload(w io.Writer, item types.Workload) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderPods writes a list table of pods plus a pagination footer.
 func RenderPods(w io.Writer, items []types.Pod, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No pods found.")
-	}
-	headers := []string{colNamespace, colName, "Workload", "Node", "Phase", "QoS", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, p := range items {
-		workload := noValue
-		if p.Metadata.Workload != nil {
-			workload = formatStr(p.Metadata.Workload.Name)
-		}
-		rows = append(rows, []string{
-			formatStr(p.Metadata.Namespace),
-			p.Metadata.Name,
-			workload,
-			formatRefName(p.Metadata.Node),
-			styledStatus(p.Metadata.Phase),
-			formatStr(p.Metadata.QOSClass),
-			FormatMoney(p.Cost.CurrentRunRateHourly),
-		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
-}
-
-// RenderNodes writes a list table of nodes plus a pagination footer.
-func RenderNodes(w io.Writer, items []types.Node, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No nodes found.")
-	}
-	headers := []string{colID, colCluster, colName, "InstanceType", "Zone", "Group", "Ready", "Spot", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, n := range items {
-		ready := formatBool(n.Metadata.IsReady)
-		if !noColor {
-			if n.Metadata.IsReady {
-				ready = StyleSuccess.Render("Yes")
-			} else {
-				ready = StyleError.Render("No")
+	return renderList(w, items, meta, "No pods found.",
+		[]string{colNamespace, colName, "Workload", "Node", "Phase", "QoS", colDollarHr},
+		func(p types.Pod) []string {
+			workload := noValue
+			if p.Metadata.Workload != nil {
+				workload = formatStr(p.Metadata.Workload.Name)
 			}
-		}
-		rows = append(rows, []string{
-			n.ID,
-			formatStr(n.Metadata.Cluster.Name),
-			n.Metadata.Name,
-			formatStr(n.Metadata.InstanceType),
-			formatStr(n.Metadata.AvailabilityZone),
-			formatStr(n.Metadata.NodeGroup),
-			ready,
-			formatBool(n.Metadata.IsSpot),
-			FormatMoney(n.Cost.CurrentRunRateHourly),
+			return []string{
+				formatStr(p.Metadata.Namespace),
+				p.Metadata.Name,
+				workload,
+				formatRefName(p.Metadata.Node),
+				styledStatus(p.Metadata.Phase),
+				formatStr(p.Metadata.QOSClass),
+				FormatMoney(p.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderNode writes a detail key-value table for one node.
+func RenderNodes(w io.Writer, items []types.Node, meta *types.Meta) error {
+	return renderList(w, items, meta, "No nodes found.",
+		[]string{colID, colCluster, colName, "InstanceType", "Zone", "Group", "Ready", "Spot", colDollarHr},
+		func(n types.Node) []string {
+			return []string{
+				n.ID,
+				formatStr(n.Metadata.Cluster.Name),
+				n.Metadata.Name,
+				formatStr(n.Metadata.InstanceType),
+				formatStr(n.Metadata.AvailabilityZone),
+				formatStr(n.Metadata.NodeGroup),
+				styledBool(n.Metadata.IsReady),
+				formatBool(n.Metadata.IsSpot),
+				FormatMoney(n.Cost.CurrentRunRateHourly),
+			}
+		})
+}
+
 func RenderNode(w io.Writer, n types.Node) error {
 	rows := [][]string{
 		{"ID", n.ID},
@@ -397,33 +402,23 @@ func RenderNode(w io.Writer, n types.Node) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderNodeGroups writes a list table of node groups plus a pagination footer.
 func RenderNodeGroups(w io.Writer, items []types.NodeGroup, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No node groups found.")
-	}
-	headers := []string{colCluster, colName, "InstanceTypes", lblNodes, "CPU cores", lblMemory, "Spot%", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, g := range items {
-		rows = append(rows, []string{
-			formatStr(g.Metadata.Cluster.Name),
-			g.Metadata.Name,
-			joinList(g.Metadata.InstanceTypes, 3),
-			formatIntPlain(g.Utilization.Counts.Nodes),
-			FormatCores(g.Capacity.CPU.TotalCores),
-			FormatBytes(g.Capacity.Memory.TotalBytes),
-			FormatPercentage(g.Metadata.SpotPercentage),
-			FormatMoney(g.Cost.CurrentRunRateHourly),
+	return renderList(w, items, meta, "No node groups found.",
+		[]string{colCluster, colName, "InstanceTypes", lblNodes, "CPU cores", lblMemory, "Spot%", colDollarHr},
+		func(g types.NodeGroup) []string {
+			return []string{
+				formatStr(g.Metadata.Cluster.Name),
+				g.Metadata.Name,
+				joinList(g.Metadata.InstanceTypes, 3),
+				formatIntPlain(g.Utilization.Counts.Nodes),
+				FormatCores(g.Capacity.CPU.TotalCores),
+				FormatBytes(g.Capacity.Memory.TotalBytes),
+				FormatPercentage(g.Metadata.SpotPercentage),
+				FormatMoney(g.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderNodeGroup writes a detail key-value table for one node group, plus
-// a member-nodes sub-table when populated.
 func RenderNodeGroup(w io.Writer, g types.NodeGroup) error {
 	rows := [][]string{
 		{"ID", g.ID},
@@ -458,38 +453,30 @@ func RenderNodeGroup(w io.Writer, g types.NodeGroup) error {
 		if _, err := fmt.Fprintln(w); err != nil {
 			return fmt.Errorf("writing node group nodes header: %w", err)
 		}
+		// nil meta suppresses the sub-table's own pagination footer: these
+		// nodes are an embedded slice of the parent, not a paged result set.
 		return RenderNodes(w, g.Nodes, nil)
 	}
 	return nil
 }
 
-// RenderNamespaces writes a list table of namespaces plus a pagination footer.
 func RenderNamespaces(w io.Writer, items []types.Namespace, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No namespaces found.")
-	}
-	headers := []string{colCluster, colName, lblPods, "CPU cores", lblMemory, colTeam, "Dept", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, n := range items {
-		rows = append(rows, []string{
-			formatStr(n.Metadata.Cluster.Name),
-			n.Metadata.Name,
-			formatIntPlain(n.Utilization.Counts.Pods),
-			FormatCores(n.Utilization.CPU.UsedCores),
-			FormatBytes(n.Utilization.Memory.UsedBytes),
-			formatRefName(n.Metadata.Team),
-			formatRefName(n.Metadata.Department),
-			FormatMoney(n.Cost.CurrentRunRateHourly),
+	return renderList(w, items, meta, "No namespaces found.",
+		[]string{colCluster, colName, lblPods, "CPU cores", lblMemory, colTeam, "Dept", colDollarHr},
+		func(n types.Namespace) []string {
+			return []string{
+				formatStr(n.Metadata.Cluster.Name),
+				n.Metadata.Name,
+				formatIntPlain(n.Utilization.Counts.Pods),
+				FormatCores(n.Utilization.CPU.UsedCores),
+				FormatBytes(n.Utilization.Memory.UsedBytes),
+				formatRefName(n.Metadata.Team),
+				formatRefName(n.Metadata.Department),
+				FormatMoney(n.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderNamespace writes a detail key-value table for one namespace, plus
-// a top-5 workloads sub-table when populated.
 func RenderNamespace(w io.Writer, n types.Namespace) error {
 	rows := [][]string{
 		{"ID", n.ID},
@@ -542,36 +529,26 @@ func RenderNamespace(w io.Writer, n types.Namespace) error {
 	return nil
 }
 
-// RenderRecommendations writes a list table of recommendations plus a
-// pagination footer.
 func RenderRecommendations(w io.Writer, items []types.Recommendation, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No recommendations found.")
-	}
-	headers := []string{colID, colCluster, colType, "Resource", "Priority", "Risk", "Savings/hr"}
-	rows := make([][]string, 0, len(items))
-	for _, r := range items {
-		resource := formatStr(r.Metadata.ResourceName)
-		if r.Metadata.Namespace != "" && r.Metadata.ResourceName != "" {
-			resource = r.Metadata.Namespace + "/" + r.Metadata.ResourceName
-		}
-		rows = append(rows, []string{
-			r.ID,
-			formatStr(r.Metadata.Cluster.Name),
-			formatStr(r.Metadata.RecommendationType),
-			resource,
-			styledPriority(r.Metadata.Priority),
-			formatStr(r.Metadata.RiskLevel),
-			FormatMoney(r.Savings.EstimatedHourly),
+	return renderList(w, items, meta, "No recommendations found.",
+		[]string{colID, colCluster, colType, "Resource", "Priority", "Risk", "Savings/hr"},
+		func(r types.Recommendation) []string {
+			resource := formatStr(r.Metadata.ResourceName)
+			if r.Metadata.Namespace != "" && r.Metadata.ResourceName != "" {
+				resource = r.Metadata.Namespace + "/" + r.Metadata.ResourceName
+			}
+			return []string{
+				r.ID,
+				formatStr(r.Metadata.Cluster.Name),
+				formatStr(r.Metadata.RecommendationType),
+				resource,
+				styledPriority(r.Metadata.Priority),
+				formatStr(r.Metadata.RiskLevel),
+				FormatMoney(r.Savings.EstimatedHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderRecommendation writes a detail key-value table for one recommendation.
 func RenderRecommendation(w io.Writer, r types.Recommendation) error {
 	rows := [][]string{
 		{"ID", r.ID},
@@ -594,31 +571,22 @@ func RenderRecommendation(w io.Writer, r types.Recommendation) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderTeams writes a list table of teams plus a pagination footer.
 func RenderTeams(w io.Writer, items []types.Team, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No teams found.")
-	}
-	headers := []string{colID, colName, "Owner", colOrigin, "Dept", lblWorkloads, colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, t := range items {
-		rows = append(rows, []string{
-			t.ID,
-			t.Metadata.Name,
-			formatStr(t.Metadata.OwnerEmail),
-			formatStr(t.Metadata.Origin),
-			formatRefName(t.Metadata.Department),
-			formatIntPlain(t.AssignedWorkloads),
-			FormatMoney(t.Cost.CurrentRunRateHourly),
+	return renderList(w, items, meta, "No teams found.",
+		[]string{colID, colName, "Owner", colOrigin, "Dept", lblWorkloads, colDollarHr},
+		func(t types.Team) []string {
+			return []string{
+				t.ID,
+				t.Metadata.Name,
+				formatStr(t.Metadata.OwnerEmail),
+				formatStr(t.Metadata.Origin),
+				formatRefName(t.Metadata.Department),
+				formatIntPlain(t.AssignedWorkloads),
+				FormatMoney(t.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderTeam writes a detail key-value table for one team.
 func RenderTeam(w io.Writer, t types.Team) error {
 	rows := [][]string{
 		{"ID", t.ID},
@@ -638,52 +606,34 @@ func RenderTeam(w io.Writer, t types.Team) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderTeamAssignments writes a list table of team assignments plus a
-// pagination footer.
 func RenderTeamAssignments(w io.Writer, items []types.TeamAssignment, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No team assignments found.")
-	}
-	headers := []string{colTeam, "EntityType", "EntityID", colCluster, "Source"}
-	rows := make([][]string, 0, len(items))
-	for _, a := range items {
-		rows = append(rows, []string{
-			formatStr(a.Metadata.Team.Name),
-			formatStr(a.Metadata.EntityType),
-			formatStr(a.Metadata.EntityIdentifier),
-			formatStr(a.Metadata.Cluster.Name),
-			formatStr(a.Metadata.Source),
+	return renderList(w, items, meta, "No team assignments found.",
+		[]string{colTeam, "EntityType", "EntityID", colCluster, "Source"},
+		func(a types.TeamAssignment) []string {
+			return []string{
+				formatStr(a.Metadata.Team.Name),
+				formatStr(a.Metadata.EntityType),
+				formatStr(a.Metadata.EntityIdentifier),
+				formatStr(a.Metadata.Cluster.Name),
+				formatStr(a.Metadata.Source),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderDepartments writes a list table of departments plus a pagination footer.
 func RenderDepartments(w io.Writer, items []types.Department, meta *types.Meta) error {
-	if len(items) == 0 {
-		return writeEmpty(w, "No departments found.")
-	}
-	headers := []string{colID, colName, colOrigin, "Teams", colDollarHr}
-	rows := make([][]string, 0, len(items))
-	for _, d := range items {
-		rows = append(rows, []string{
-			d.ID,
-			d.Metadata.Name,
-			formatStr(d.Metadata.Origin),
-			formatIntPlain(d.Teams),
-			FormatMoney(d.Cost.CurrentRunRateHourly),
+	return renderList(w, items, meta, "No departments found.",
+		[]string{colID, colName, colOrigin, "Teams", colDollarHr},
+		func(d types.Department) []string {
+			return []string{
+				d.ID,
+				d.Metadata.Name,
+				formatStr(d.Metadata.Origin),
+				formatIntPlain(d.Teams),
+				FormatMoney(d.Cost.CurrentRunRateHourly),
+			}
 		})
-	}
-	if err := writeTable(w, headers, rows); err != nil {
-		return err
-	}
-	return writeFooter(w, len(items), meta)
 }
 
-// RenderDepartment writes a detail key-value table for one department.
 func RenderDepartment(w io.Writer, d types.Department) error {
 	rows := [][]string{
 		{"ID", d.ID},
@@ -702,7 +652,6 @@ func RenderDepartment(w io.Writer, d types.Department) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderOrganization writes a detail key-value table for the org snapshot.
 func RenderOrganization(w io.Writer, o types.Organization) error {
 	rows := [][]string{
 		{"ID", o.ID},
@@ -736,8 +685,6 @@ func RenderOrganization(w io.Writer, o types.Organization) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
-// RenderOrganizationDashboard writes the dashboard view: snapshot summary,
-// MTD/savings/calendar, top clusters, and recommendation summary tables.
 func RenderOrganizationDashboard(w io.Writer, d types.OrganizationDashboard) error {
 	rows := [][]string{
 		{"Organization ID", d.OrganizationID},

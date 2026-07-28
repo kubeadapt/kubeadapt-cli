@@ -1,5 +1,5 @@
 // Package output renders Kubeadapt /v1 resource types as human-friendly
-// tables, JSON, and YAML. Renderers always accept an io.Writer — no helper
+// tables, JSON, and YAML. Renderers always accept an io.Writer - no helper
 // here writes to os.Stdout. cmd/* is responsible for choosing the writer.
 package output
 
@@ -21,7 +21,7 @@ func FormatMoney(m types.Money) string {
 	return m.String()
 }
 
-// FormatMoneyPtr is like FormatMoney but accepts a pointer; nil → "-".
+// FormatMoneyPtr is like FormatMoney but accepts a pointer; nil -> "-".
 func FormatMoneyPtr(m *types.Money) string {
 	if m == nil {
 		return noValue
@@ -106,13 +106,27 @@ func PaginationFooter(itemsShown int, meta *types.Meta) string {
 	b.WriteString(".")
 
 	if p.HasMore {
-		b.WriteString(" More results available — use --paginate to auto-fetch, or copy this cursor:\n")
+		b.WriteString(" More results available - use --paginate to auto-fetch, or copy this cursor:\n")
 		b.WriteString("  --cursor=")
 		b.WriteString(p.NextCursor)
 	} else {
 		b.WriteString(" End of results.")
 	}
 	return b.String()
+}
+
+// PaginationCursorHint returns the resume flag alone, or "" when this is the
+// last page. Under --quiet the descriptive footer is chrome, but dropping the
+// cursor with it silently truncates a scripted paginated run.
+func PaginationCursorHint(meta *types.Meta) string {
+	if meta == nil || meta.Pagination == nil {
+		return ""
+	}
+	p := meta.Pagination
+	if !p.HasMore || p.NextCursor == "" {
+		return ""
+	}
+	return "--cursor=" + p.NextCursor
 }
 
 func formatBool(v bool) string {
