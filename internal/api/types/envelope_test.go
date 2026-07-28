@@ -106,6 +106,31 @@ func TestEnvelope_UnmarshalError(t *testing.T) {
 	assert.Equal(t, "cluster_id", env.Error.Details[0]["field"])
 }
 
+func TestMeta_IgnoredParamsRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// A typo'd filter is accepted with HTTP 200 and silently not applied, so
+	// meta.ignored_params is the only signal that the numbers are wrong.
+	const serverEnvelope = `{
+		"data": [{"id":"w-1","name":"api"}],
+		"meta": {
+			"request_id":"req-ign",
+			"applied_at":"2026-05-20T12:00:00Z",
+			"ignored_params":["namespaces"]
+		}
+	}`
+
+	var env Envelope[[]fixtureItem]
+	require.NoError(t, json.Unmarshal([]byte(serverEnvelope), &env))
+	assert.Equal(t, []string{"namespaces"}, env.Meta.IgnoredParams,
+		"meta.ignored_params must decode; it is the only machine signal that a filter was dropped")
+
+	raw, err := json.Marshal(Meta{RequestID: "req-1", AppliedAt: "2026-05-20T12:00:00Z"})
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "ignored_params",
+		"an empty value must stay omitted so existing consumers see an unchanged shape")
+}
+
 func TestEnvelope_MarshalRoundTrip(t *testing.T) {
 	t.Parallel()
 

@@ -1,8 +1,7 @@
 package types
 
-// Department is the /v1 Department resource. Teams is the count of member
-// teams (direct FK via teams.department_id). AssignedWorkloads /
-// AssignedPVs are the transitive rollup across those member teams.
+// Teams counts direct member teams; AssignedWorkloads and AssignedPVs are the
+// transitive rollup across those teams.
 type Department struct {
 	ID                string             `json:"id"`
 	Kind              string             `json:"kind"`
@@ -13,8 +12,6 @@ type Department struct {
 	Cost              DepartmentCost     `json:"cost"`
 }
 
-// DepartmentMetadata is the identity / governance sub-block for a
-// Department.
 type DepartmentMetadata struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -24,9 +21,8 @@ type DepartmentMetadata struct {
 	UpdatedAt   string `json:"updated_at,omitempty"`
 }
 
-// DepartmentCost is the department analog of TeamCost. INCLUDES CostMode —
-// the rollup is over every workload whose team belongs to this department,
-// which varies by mode.
+// DepartmentCost includes CostMode: it rolls up every workload whose team
+// belongs to this department, so it varies by mode.
 type DepartmentCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`

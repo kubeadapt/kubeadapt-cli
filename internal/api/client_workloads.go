@@ -7,12 +7,11 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// WorkloadFilter narrows the result set of ListWorkloads. ClusterIDs picks
-// between the scoped and flat endpoints via pickScopedOrFlat.
+// ClusterIDs selects the scoped vs flat endpoint via pickScopedOrFlat.
 type WorkloadFilter struct {
 	PagedOpts
 	CostModeOpt
-	ClusterIDs    []string // single → /v1/clusters/{cid}/workloads; multi/empty → /v1/workloads
+	ClusterIDs    []string // single -> /v1/clusters/{cid}/workloads; multi/empty -> /v1/workloads
 	Namespaces    []string // csv
 	Kinds         []string // csv: Deployment, StatefulSet, DaemonSet
 	Teams         []string // csv
@@ -21,14 +20,11 @@ type WorkloadFilter struct {
 	MinCostHourly string
 }
 
-// WorkloadGetOpts captures optional query parameters accepted by
-// GET /v1/workloads/{workload_uid}.
 type WorkloadGetOpts struct {
 	CostModeOpt
 }
 
-// PodFilter narrows the result set of ListWorkloadPods. The endpoint is always
-// scoped under a workload UID, so no ClusterIDs field is needed here.
+// Always scoped under a workload UID, so no ClusterIDs field is needed.
 type PodFilter struct {
 	PagedOpts
 	CostModeOpt
@@ -41,9 +37,8 @@ type PodFilter struct {
 	HostNetwork *bool
 }
 
-// ListWorkloads lists workloads. With a single ClusterID it calls the
-// scoped path /v1/clusters/{cid}/workloads; otherwise it calls the flat
-// /v1/workloads and forwards the cluster_id list as a CSV query param.
+// One ClusterID uses the scoped path; otherwise the flat path with the
+// cluster_id list forwarded as CSV.
 func (c *Client) ListWorkloads(
 	ctx context.Context, f WorkloadFilter,
 ) ([]types.Workload, *types.Meta, error) {
@@ -69,7 +64,6 @@ func (c *Client) ListWorkloads(
 	return DoEnvelopeGet[[]types.Workload](ctx, c, path, params)
 }
 
-// GetWorkload fetches a workload detail via GET /v1/workloads/{workload_uid}.
 func (c *Client) GetWorkload(
 	ctx context.Context, workloadUID string, opts WorkloadGetOpts,
 ) (*types.Workload, *types.Meta, error) {
@@ -78,8 +72,6 @@ func (c *Client) GetWorkload(
 	return DoEnvelopeGet[*types.Workload](ctx, c, "/v1/workloads/"+workloadUID, params)
 }
 
-// ListWorkloadPods lists pods owned by a given workload via
-// GET /v1/workloads/{workload_uid}/pods.
 func (c *Client) ListWorkloadPods(
 	ctx context.Context, workloadUID string, f PodFilter,
 ) ([]types.Pod, *types.Meta, error) {

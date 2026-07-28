@@ -7,7 +7,6 @@ import (
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 )
 
-// TeamFilter narrows the result set of ListTeams.
 type TeamFilter struct {
 	PagedOpts
 	CostModeOpt
@@ -15,13 +14,10 @@ type TeamFilter struct {
 	Origins       []string // csv
 }
 
-// TeamGetOpts captures optional query parameters accepted by
-// GET /v1/teams/{team_id}.
 type TeamGetOpts struct {
 	CostModeOpt
 }
 
-// AssignmentFilter narrows the result set of ListTeamAssignments.
 type AssignmentFilter struct {
 	PagedOpts
 	EntityType string   // namespace|workload|cluster
@@ -29,7 +25,6 @@ type AssignmentFilter struct {
 	Source     string   // manual|label|... (backend-defined)
 }
 
-// ListTeams lists teams via GET /v1/teams.
 func (c *Client) ListTeams(
 	ctx context.Context, f TeamFilter,
 ) ([]types.Team, *types.Meta, error) {
@@ -41,7 +36,6 @@ func (c *Client) ListTeams(
 	return DoEnvelopeGet[[]types.Team](ctx, c, "/v1/teams", params)
 }
 
-// GetTeam fetches a team by ID via GET /v1/teams/{team_id}.
 func (c *Client) GetTeam(
 	ctx context.Context, teamID string, opts TeamGetOpts,
 ) (*types.Team, *types.Meta, error) {
@@ -50,8 +44,6 @@ func (c *Client) GetTeam(
 	return DoEnvelopeGet[*types.Team](ctx, c, "/v1/teams/"+teamID, params)
 }
 
-// ListTeamAssignments lists assignments for a team via
-// GET /v1/teams/{team_id}/assignments.
 func (c *Client) ListTeamAssignments(
 	ctx context.Context, teamID string, f AssignmentFilter,
 ) ([]types.TeamAssignment, *types.Meta, error) {

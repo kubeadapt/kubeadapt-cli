@@ -5,9 +5,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// New returns a zap.Logger for CLI use.
-// debug=true  → human-readable colored console output to stderr
-// debug=false → no-op logger (zero allocation overhead)
+// debug=false returns a no-op logger; debug=true writes colored console output
+// to stderr.
 func New(debug bool) (*zap.Logger, error) {
 	if !debug {
 		return zap.NewNop(), nil

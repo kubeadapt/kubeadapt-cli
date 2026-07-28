@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -40,15 +41,26 @@ func successEnvelope(data widget) types.Envelope[widget] {
 	}
 }
 
+// Server shutdown is registered on t, so call sites need no defer.
+func newTestClient(t *testing.T, h http.HandlerFunc, opts ...Option) *Client {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return NewClient(srv.URL, "key", opts...)
+}
+
+func getWidget(t *testing.T, h http.HandlerFunc, opts ...Option) (widget, *types.Meta, error) {
+	t.Helper()
+	return DoEnvelopeGet[widget](t.Context(), newTestClient(t, h, opts...), "/v1/widgets", nil)
+}
+
 func TestDoEnvelopeGet_HappyPath(t *testing.T) {
 	want := widget{ID: "w-1", Name: "alpha"}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/widgets/w-1", r.URL.Path)
 		writeJSON(t, w, http.StatusOK, successEnvelope(want))
-	}))
-	defer srv.Close()
+	})
 
-	c := NewClient(srv.URL, "key")
 	got, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets/w-1", nil)
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
@@ -57,7 +69,7 @@ func TestDoEnvelopeGet_HappyPath(t *testing.T) {
 }
 
 func TestDoEnvelopeGet_EnvelopeError_422(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(t, w, http.StatusUnprocessableEntity, types.Envelope[widget]{
 			Error: &types.APIErrorBody{
 				Code:    string(CodeInvalidCostMode),
@@ -65,11 +77,7 @@ func TestDoEnvelopeGet_EnvelopeError_422(t *testing.T) {
 				Details: []map[string]any{{"field": "cost_mode"}},
 			},
 		})
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	})
 	require.Error(t, err)
 	assert.True(t, IsInvalidCostMode(err), "expected IsInvalidCostMode, got: %v", err)
 	apiErr, ok := errors.AsType[*APIError](err)
@@ -79,22 +87,26 @@ func TestDoEnvelopeGet_EnvelopeError_422(t *testing.T) {
 	assert.NotEmpty(t, apiErr.Details, "expected details to be populated")
 }
 
-func TestDoEnvelopeGet_RateLimited429_NoRetry(t *testing.T) {
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func rateLimitedHandler(t *testing.T, calls *atomic.Int32, retryAfter string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		w.Header().Set("Retry-After", "60")
+		w.Header().Set("Retry-After", retryAfter)
 		writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
 			Error: &types.APIErrorBody{
 				Code:    string(CodeRateLimited),
 				Message: "slow down",
 			},
 		})
-	}))
-	defer srv.Close()
+	}
+}
 
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+func noSleep() Option {
+	return WithSleeper(func(context.Context, time.Duration) error { return nil })
+}
+
+func TestDoEnvelopeGet_RateLimited429_NoRetry(t *testing.T) {
+	var calls atomic.Int32
+	_, _, err := getWidget(t, rateLimitedHandler(t, &calls, "60"))
 	require.Error(t, err)
 	assert.True(t, IsRateLimited(err), "expected IsRateLimited, got: %v", err)
 	apiErr, _ := errors.AsType[*APIError](err)
@@ -105,29 +117,25 @@ func TestDoEnvelopeGet_RateLimited429_NoRetry(t *testing.T) {
 func TestDoEnvelopeGet_RateLimited429_WithRetry(t *testing.T) {
 	var calls atomic.Int32
 	want := widget{ID: "w-2", Name: "beta"}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := calls.Add(1)
-		if n == 1 {
+
+	var slept []time.Duration
+	got, meta, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
+		if n := calls.Add(1); n == 1 {
 			w.Header().Set("Retry-After", "1")
 			writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
-				Error: &types.APIErrorBody{
-					Code:    string(CodeRateLimited),
-					Message: "slow down",
-				},
+				Error: &types.APIErrorBody{Code: string(CodeRateLimited), Message: "slow down"},
 			})
 			return
 		}
 		writeJSON(t, w, http.StatusOK, successEnvelope(want))
-	}))
-	defer srv.Close()
-
-	var slept []time.Duration
-	c := NewClient(srv.URL, "key",
+	},
 		WithRetryOnRateLimit(true),
 		WithMaxRetries(1),
-		withSleeper(func(d time.Duration) { slept = append(slept, d) }),
+		WithSleeper(func(_ context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		}),
 	)
-	got, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 	assert.NotNil(t, meta, "expected non-nil meta")
@@ -138,31 +146,15 @@ func TestDoEnvelopeGet_RateLimited429_WithRetry(t *testing.T) {
 
 func TestDoEnvelopeGet_RateLimited429_RetryGivesUp(t *testing.T) {
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		w.Header().Set("Retry-After", "1")
-		writeJSON(t, w, http.StatusTooManyRequests, types.Envelope[widget]{
-			Error: &types.APIErrorBody{
-				Code:    string(CodeRateLimited),
-				Message: "slow down",
-			},
-		})
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key",
-		WithRetryOnRateLimit(true),
-		WithMaxRetries(1),
-		withSleeper(func(time.Duration) {}),
-	)
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	_, _, err := getWidget(t, rateLimitedHandler(t, &calls, "1"),
+		WithRetryOnRateLimit(true), WithMaxRetries(1), noSleep())
 	assert.True(t, IsRateLimited(err), "expected IsRateLimited, got: %v", err)
 	assert.Equal(t, int32(2), calls.Load(), "expected 2 calls (initial + 1 retry)")
 }
 
 func TestDoEnvelopeGet_RateLimitUnavailable503(t *testing.T) {
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		writeJSON(t, w, http.StatusServiceUnavailable, types.Envelope[widget]{
 			Error: &types.APIErrorBody{
@@ -170,59 +162,41 @@ func TestDoEnvelopeGet_RateLimitUnavailable503(t *testing.T) {
 				Message: "rate limiter unavailable",
 			},
 		})
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key",
-		WithRetryOnRateLimit(true),
-		WithMaxRetries(3),
-		withSleeper(func(time.Duration) {}),
-	)
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	}, WithRetryOnRateLimit(true), WithMaxRetries(3), noSleep())
 	assert.True(t, IsRateLimitUnavailable(err), "expected IsRateLimitUnavailable, got: %v", err)
 	assert.Equal(t, int32(1), calls.Load(), "503 must NOT trigger retry")
 }
 
 func TestDoEnvelopeGet_TransportError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		hj, ok := w.(http.Hijacker)
 		require.True(t, ok, "server does not support hijacking")
-		conn, _, err := hj.Hijack()
-		require.NoError(t, err, "hijack")
+		conn, _, hjErr := hj.Hijack()
+		require.NoError(t, hjErr, "hijack")
 		_ = conn.Close()
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	})
 	require.Error(t, err, "expected transport error")
 	_, ok := errors.AsType[*APIError](err)
 	assert.False(t, ok, "transport error should not be *APIError, got %T: %v", err, err)
 }
 
 func TestDoEnvelopeGet_MalformedJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("not-json"))
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	})
 	require.Error(t, err, "expected decode error")
 	assert.Contains(t, err.Error(), "decoding response")
 }
 
 func TestDoEnvelopeGet_CursorParamsForwarded(t *testing.T) {
 	var seen url.Values
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		seen = r.URL.Query()
 		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
-	}))
-	defer srv.Close()
+	})
 
-	c := NewClient(srv.URL, "key")
 	params := appendCursorParams(nil, "abc123", 50, true)
 	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", params)
 	require.NoError(t, err)
@@ -231,10 +205,11 @@ func TestDoEnvelopeGet_CursorParamsForwarded(t *testing.T) {
 	assert.Equal(t, "true", seen.Get("include_total"))
 }
 
-func TestDoEnvelopeGet_AuthorizationHeader(t *testing.T) {
-	var seenAuth string
+func TestDoEnvelopeGet_OutboundHeaders(t *testing.T) {
+	var seenAuth, seenUA string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenAuth = r.Header.Get("Authorization")
+		seenUA = r.Header.Get("User-Agent")
 		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
 	}))
 	defer srv.Close()
@@ -243,52 +218,27 @@ func TestDoEnvelopeGet_AuthorizationHeader(t *testing.T) {
 	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer secret-key", seenAuth)
-}
-
-func TestDoEnvelopeGet_RateLimitHeadersCaptured(t *testing.T) {
-	resetAt := time.Now().Add(2 * time.Minute).Unix()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-RateLimit-Limit", "100")
-		w.Header().Set("X-RateLimit-Remaining", "73")
-		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt, 10))
-		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
-	require.NoError(t, err)
-	rl := c.RateLimit()
-	assert.Equal(t, 100, rl.Limit)
-	assert.Equal(t, 73, rl.Remaining)
-	assert.Equal(t, resetAt, rl.Reset.Unix())
+	assert.True(t, strings.HasPrefix(seenUA, "kubeadapt-cli/"),
+		"expected User-Agent to start with 'kubeadapt-cli/', got %q", seenUA)
 }
 
 func TestDoEnvelopeGet_RequestIDLogged(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, meta, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Request-ID", "rid-server-issued-42")
 		writeJSON(t, w, http.StatusOK, types.Envelope[widget]{
 			Data: widget{ID: "x"},
 			Meta: types.Meta{RequestID: "rid-server-issued-42"},
 		})
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, meta, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	})
 	require.NoError(t, err)
 	assert.Equal(t, "rid-server-issued-42", meta.RequestID)
 }
 
 func TestDoEnvelopeGet_Non2xxWithoutEnvelope(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("upstream is on fire"))
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	})
 	apiErr, ok := errors.AsType[*APIError](err)
 	require.True(t, ok, "expected *APIError, got %T: %v", err, err)
 	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
@@ -435,16 +385,31 @@ func TestValidateNoCostMode(t *testing.T) {
 	}
 }
 
+func TestDoEnvelopeGet_RateLimitHeadersCaptured(t *testing.T) {
+	resetAt := time.Now().Add(2 * time.Minute).Unix()
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "100")
+		w.Header().Set("X-RateLimit-Remaining", "73")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt, 10))
+		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
+	})
+
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+	require.NoError(t, err)
+	rl := c.RateLimit()
+	assert.Equal(t, 100, rl.Limit)
+	assert.Equal(t, 73, rl.Remaining)
+	assert.Equal(t, resetAt, rl.Reset.Unix())
+}
+
 func TestRateLimitSnapshot_MalformedHeadersZeroed(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-RateLimit-Limit", "not-a-number")
 		w.Header().Set("X-RateLimit-Remaining", "")
 		w.Header().Set("X-RateLimit-Reset", "garbage")
 		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
-	}))
-	defer srv.Close()
+	})
 
-	c := NewClient(srv.URL, "key")
 	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
 	require.NoError(t, err)
 	rl := c.RateLimit()
@@ -455,29 +420,13 @@ func TestRateLimitSnapshot_MalformedHeadersZeroed(t *testing.T) {
 
 func TestRateLimitSnapshot_HTTPDateReset(t *testing.T) {
 	resetTime := time.Now().Add(90 * time.Second).UTC().Truncate(time.Second)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-RateLimit-Reset", resetTime.Format(http.TimeFormat))
 		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
-	}))
-	defer srv.Close()
+	})
 
-	c := NewClient(srv.URL, "key")
 	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
 	require.NoError(t, err)
 	got := c.RateLimit().Reset
 	assert.True(t, got.Equal(resetTime), "expected reset %s, got %s", resetTime, got)
-}
-
-func TestDoEnvelopeGet_UserAgent(t *testing.T) {
-	var ua string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ua = r.Header.Get("User-Agent")
-		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
-	}))
-	defer srv.Close()
-
-	c := NewClient(srv.URL, "key")
-	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(ua, "kubeadapt-cli/"), "expected User-Agent to start with 'kubeadapt-cli/', got %q", ua)
 }

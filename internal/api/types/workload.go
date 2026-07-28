@@ -1,9 +1,7 @@
 package types
 
-// Workload is the /v1 Workload resource covering all 5 kinds:
-// Deployment, StatefulSet, DaemonSet, Job, CronJob. ID is the Kubernetes
-// metadata.uid. Cost block ACCEPTS cost_mode and echoes the applied mode
-// in cost.cost_mode.
+// Workload covers Deployment, StatefulSet, DaemonSet, Job and CronJob. ID is the
+// Kubernetes metadata.uid. Its cost block accepts cost_mode.
 type Workload struct {
 	ID          string              `json:"id"`
 	Kind        string              `json:"kind"`
@@ -13,7 +11,6 @@ type Workload struct {
 	Cost        WorkloadCost        `json:"cost"`
 }
 
-// WorkloadMetadata is the identity / status sub-block for a Workload.
 type WorkloadMetadata struct {
 	Name               string            `json:"name"`
 	WorkloadKind       string            `json:"workload_kind"`
@@ -30,24 +27,20 @@ type WorkloadMetadata struct {
 	LastSeenAt         string            `json:"last_seen_at,omitempty"`
 }
 
-// WorkloadCapacity is the capacity block for a Workload — the aggregate
-// of container limits across all containers in the pod template.
+// WorkloadCapacity aggregates container limits across the whole pod template.
 type WorkloadCapacity struct {
 	CPU    WorkloadCapacityCPU    `json:"cpu"`
 	Memory WorkloadCapacityMemory `json:"memory"`
 }
 
-// WorkloadCapacityCPU is the CPU limit roll-up for a Workload.
 type WorkloadCapacityCPU struct {
 	LimitCores float64 `json:"limit_cores"`
 }
 
-// WorkloadCapacityMemory is the memory limit roll-up for a Workload.
 type WorkloadCapacityMemory struct {
 	LimitBytes int64 `json:"limit_bytes"`
 }
 
-// WorkloadUtilization is the utilization block for a Workload.
 type WorkloadUtilization struct {
 	CPU      UtilizationCPU    `json:"cpu"`
 	Memory   UtilizationMemory `json:"memory"`
@@ -55,7 +48,6 @@ type WorkloadUtilization struct {
 	Counts   WorkloadCounts    `json:"counts"`
 }
 
-// WorkloadReplicas is the replica-state breakdown for a Workload.
 type WorkloadReplicas struct {
 	Desired     int `json:"desired"`
 	Available   int `json:"available"`
@@ -63,15 +55,13 @@ type WorkloadReplicas struct {
 	Updated     int `json:"updated"`
 }
 
-// WorkloadCounts is the live-count sub-block for a Workload.
 type WorkloadCounts struct {
 	Pods        int `json:"pods"`
 	RunningPods int `json:"running_pods"`
 	Containers  int `json:"containers"`
 }
 
-// WorkloadCost is the cost block for a Workload. INCLUDES CostMode —
-// workload cost is a sum-of-container-costs which DOES vary by mode.
+// WorkloadCost includes CostMode: it sums container costs, so it varies by mode.
 type WorkloadCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`

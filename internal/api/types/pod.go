@@ -1,7 +1,6 @@
 package types
 
-// Pod is the /v1 Pod resource. Accepts cost_mode like Workload (echoed in
-// cost.cost_mode). ID is the Kubernetes metadata.uid (pod_uid).
+// Pod accepts cost_mode like Workload. ID is the Kubernetes metadata.uid.
 type Pod struct {
 	ID          string         `json:"id"`
 	Kind        string         `json:"kind"`
@@ -11,7 +10,6 @@ type Pod struct {
 	Cost        PodCost        `json:"cost"`
 }
 
-// PodMetadata is the identity / scheduling sub-block for a Pod.
 type PodMetadata struct {
 	Name          string            `json:"name"`
 	Namespace     string            `json:"namespace"`
@@ -32,24 +30,19 @@ type PodMetadata struct {
 	LastSeenAt    string            `json:"last_seen_at,omitempty"`
 }
 
-// PodWorkloadRef is the owner-workload reference embedded under
-// PodMetadata.Workload. Uses uid (k8s metadata.uid) rather than the
-// nested {id, name} ref shape because workloads are uid-keyed.
+// PodWorkloadRef deviates from the NestedRef {id, name} shape and uses uid,
+// because workloads are uid-keyed.
 type PodWorkloadRef struct {
 	UID  string `json:"uid"`
 	Kind string `json:"kind"`
 	Name string `json:"name"`
 }
 
-// PodCapacity is the capacity block for a Pod — reuses the workload
-// limit sub-block shape (the pod is the aggregation unit for container
-// limits).
 type PodCapacity struct {
 	CPU    WorkloadCapacityCPU    `json:"cpu"`
 	Memory WorkloadCapacityMemory `json:"memory"`
 }
 
-// PodUtilization is the utilization block for a Pod.
 type PodUtilization struct {
 	CPU           UtilizationCPU    `json:"cpu"`
 	Memory        UtilizationMemory `json:"memory"`
@@ -58,15 +51,13 @@ type PodUtilization struct {
 	OOMKillsTotal int64             `json:"oom_kills_total"`
 }
 
-// PodCounts is the container-state breakdown for a Pod.
 type PodCounts struct {
 	Containers        int `json:"containers"`
 	RunningContainers int `json:"running_containers"`
 	ReadyContainers   int `json:"ready_containers"`
 }
 
-// PodCost is the cost block for a Pod. INCLUDES CostMode — pod cost is a
-// sum-of-container-costs which DOES vary by mode.
+// PodCost includes CostMode: it sums container costs, so it varies by mode.
 type PodCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`
