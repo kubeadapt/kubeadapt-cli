@@ -311,7 +311,7 @@ Endpoints that don't support it (cluster, node, node-group, recommendation, team
 
 The API reports query parameters it did not recognize. When that happens on a `get` list command, the CLI warns on stderr:
 
-```
+```text
 kubeadapt: warning: the API ignored unknown parameter "namespaces" - results are NOT filtered by it.
 ```
 

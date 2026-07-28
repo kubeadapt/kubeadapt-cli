@@ -321,6 +321,23 @@ func TestPaginate_MaxWaitBudgetExceededReturnsPartial(t *testing.T) {
 	assert.Empty(t, h.slept, "the budget check must happen before sleeping, not after")
 }
 
+// HasMore is the authoritative end-of-results signal, so HasMore with no
+// cursor is a server contract violation, not a terminal page. Returning it as a
+// clean run handed the caller a silently truncated answer marked complete.
+func TestPaginate_HasMoreWithoutCursorIsReportedAsPartial(t *testing.T) {
+	h := newPaginateHarness(t, formatJSON, []pageSpec{
+		okPage([]string{"a1"}, "c1"),
+		{items: []pageItem{{ID: "b1"}}, hasMore: true},
+	}, nil, "--paginate")
+
+	err := h.run(t)
+
+	require.Error(t, err, "an inconsistent pagination block must not read as a complete run")
+	assert.Equal(t, []string{"a1", "b1"}, h.emittedIDs(t), "everything fetched must still be returned")
+	assert.Contains(t, h.stdout.String(), `"partial": true`,
+		"the document must say the answer may be short")
+}
+
 // Under -o table the only truncation signal was stderr prose, which is
 // routinely redirected away; a short table then looks like a complete answer.
 func TestPaginate_TableModeSignalsPartialOnStdout(t *testing.T) {

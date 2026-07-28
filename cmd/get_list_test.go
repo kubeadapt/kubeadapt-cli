@@ -70,7 +70,14 @@ func newListHarness(t *testing.T, c *cobra.Command, serverURL, outFmt string, fl
 			if !f.Changed {
 				return
 			}
-			_ = f.Value.Set(f.DefValue)
+			// Set() appends on a slice flag that has already been set, so it
+			// would leave the old values in place and add DefValue ("[]") on
+			// top. Replace is the only call that actually clears one.
+			if sv, ok := f.Value.(pflag.SliceValue); ok {
+				_ = sv.Replace(nil)
+			} else {
+				_ = f.Value.Set(f.DefValue)
+			}
 			f.Changed = false
 		})
 		c.SetContext(nil)
@@ -298,6 +305,59 @@ func TestSeverityFlags_ShareOneOrdering(t *testing.T) {
 	assert.Contains(t, risk.Usage, order)
 	assert.Contains(t, priority.Usage, order,
 		"risk-level and priority describe the same severity scale and must not invert it")
+}
+
+func TestOriginFlag_RejectsValueTheAPIWouldNotAccept(t *testing.T) {
+	cmds := map[string]*cobra.Command{
+		"departments": getDepartmentsCmd,
+		"teams":       getTeamsCmd,
+	}
+	for name, c := range cmds {
+		t.Run(name+"/invalid", func(t *testing.T) {
+			server := testutil.NewMockServer(t)
+			newListHarness(t, c, server.URL, formatJSON, map[string]string{"origin": "K8s"})
+
+			err := c.RunE(c, nil)
+
+			require.Error(t, err, "a misspelled --origin must not be sent to the API")
+			assert.Equal(t, exitUsage, exitCodeFor(err), "a bad enum value is a usage error")
+			assert.Contains(t, err.Error(), "k8s, kubeadapt", "the message must list the accepted values")
+		})
+		t.Run(name+"/valid", func(t *testing.T) {
+			server := testutil.NewMockServer(t)
+			newListHarness(t, c, server.URL, formatJSON, map[string]string{"origin": "kubeadapt"})
+
+			assert.NoError(t, c.RunE(c, nil), "a documented --origin value must still be accepted")
+		})
+	}
+}
+
+// The harness restores flags by value, and pflag's slice values append rather
+// than replace once they have been set. Without a slice-aware reset, one test's
+// --cluster-id survives into the next and silently narrows its request.
+func TestListHarness_ResetsSliceFlagsBetweenRuns(t *testing.T) {
+	server := testutil.NewMockServer(t)
+	flag := getNamespacesCmd.Flags().Lookup("cluster-id")
+	require.NotNil(t, flag)
+
+	t.Run("first", func(t *testing.T) {
+		newListHarness(t, getNamespacesCmd, server.URL, formatJSON, map[string]string{
+			"cluster-id": clusterIDForNamespace,
+		})
+	})
+
+	sv, ok := flag.Value.(pflag.SliceValue)
+	require.True(t, ok, "--cluster-id should be a slice flag")
+	assert.Empty(t, sv.GetSlice(),
+		"cleanup must clear --cluster-id, not append the default back onto it")
+
+	t.Run("second", func(t *testing.T) {
+		newListHarness(t, getNamespacesCmd, server.URL, formatJSON, map[string]string{
+			"cluster-id": clusterIDSecond,
+		})
+		assert.Equal(t, []string{clusterIDSecond}, sv.GetSlice(),
+			"a later test must see only its own --cluster-id")
+	})
 }
 
 func TestTriStateBoolFlags_AreDocumentedAsTriState(t *testing.T) {

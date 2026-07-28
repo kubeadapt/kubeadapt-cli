@@ -47,8 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fi
   ```
 
-  Under `-o table` the collected rows are still rendered; the resume cursor is
-  on stderr only.
+  Under `-o table` the collected rows are still rendered, followed by a
+  `PARTIAL RESULTS:` line on stdout carrying the resume cursor. The same
+  details also go to stderr.
 
 - **`get node-groups` rejects `--limit`, `--cursor`, `--paginate`, and
   `--include-total`.** That endpoint returns every node group in a single

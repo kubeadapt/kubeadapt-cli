@@ -37,12 +37,11 @@ var authStatusCmd = &cobra.Command{
 	Short: "Show current authentication status",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report, err := buildAuthStatusReport(cmd)
-		if err != nil {
-			return err
-		}
 		// The report is printed before the exit status is decided so that a
 		// failure still yields the full diagnostic, in every output format.
+		// buildAuthStatusReport returns no error for exactly that reason: every
+		// failure has to arrive as a status on the report, not instead of one.
+		report := buildAuthStatusReport(cmd)
 		if err := renderAuthStatusReport(cmd.OutOrStdout(), authOutputFormat(cmd), report); err != nil {
 			return err
 		}
@@ -60,21 +59,23 @@ func effectiveConfig(cmd *cobra.Command) (*config.Config, error) {
 	return config.Load(cfgFile)
 }
 
-func buildAuthStatusReport(cmd *cobra.Command) (authStatusReport, error) {
+func buildAuthStatusReport(cmd *cobra.Command) authStatusReport {
 	c, err := effectiveConfig(cmd)
 	if err != nil {
-		return authStatusReport{Status: authStatusNotAuthenticated}, nil
+		return authStatusReport{Status: authStatusNotAuthenticated}
 	}
 
 	report := authStatusReport{APIURL: c.APIURL, Status: authStatusNoAPIKey}
 	if c.APIKey == "" {
-		return report, nil
+		return report
 	}
 	report.APIKeyMasked = config.MaskAPIKey(c.APIKey)
 
 	client, err := newAPIClientFromCmd(cmd)
 	if err != nil {
-		return report, err
+		report.Status = authStatusError
+		report.Error = err.Error()
+		return report
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 	defer cancel()
@@ -96,7 +97,7 @@ func buildAuthStatusReport(cmd *cobra.Command) (authStatusReport, error) {
 		report.Status = authStatusError
 		report.Error = err.Error()
 	}
-	return report, nil
+	return report
 }
 
 // authStatusExitError makes `kubeadapt auth status` exit 0 if and only if the

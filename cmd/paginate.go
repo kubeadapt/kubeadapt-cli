@@ -39,6 +39,9 @@ const (
 
 var errMaxWaitExceeded = errors.New("--max-wait budget exhausted")
 
+var errMissingCursor = errors.New(
+	"the API reported more results but returned no cursor to fetch them; results may be incomplete")
+
 // paginateSleep is the single wait used by both the pacer and the client's
 // Retry-After retry, so one budget covers every kind of rate-limit wait and
 // tests can make all of them observable through one seam.
@@ -146,6 +149,12 @@ func collectPages[T any](ctx context.Context, p *paginator, fetch PageFetcher[T]
 		}
 		next := meta.Pagination.NextCursor
 		if next == "" {
+			// HasMore is authoritative, so this page claims more results and
+			// gives no way to reach them. Reporting a complete run here would
+			// pass a silently truncated answer off as the whole set.
+			run.Partial = true
+			run.ResumeCursor = cursor
+			run.Err = errMissingCursor
 			return run
 		}
 		if err := p.pace(ctx, pages, len(run.Items), meta); err != nil {

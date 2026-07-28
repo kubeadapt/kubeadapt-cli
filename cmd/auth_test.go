@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -199,6 +200,146 @@ func TestAuthLogin_QuietStillWarnsAboutUnverifiedKey(t *testing.T) {
 	assert.Contains(t, stderr, cfgPath, "the warning must name the file that was written")
 }
 
+// A config that exists but cannot be parsed or read is not an absent config.
+// Falling back to Default() there overwrote a working key with a fresh file.
+func TestAuthLogin_UnreadableConfigIsNotOverwritten(t *testing.T) {
+	tests := []struct {
+		name     string
+		write    func(*testing.T, string)
+		skipRoot bool
+	}{
+		{
+			name: "corrupt yaml",
+			write: func(t *testing.T, path string) {
+				require.NoError(t, os.WriteFile(path, []byte("api_key: [unterminated\n"), 0600))
+			},
+		},
+		{
+			name:     "unreadable file",
+			skipRoot: true,
+			write: func(t *testing.T, path string) {
+				require.NoError(t, os.WriteFile(path, []byte("api_key: good-existing-key\n"), 0600))
+				require.NoError(t, os.Chmod(path, 0000))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skipRoot && os.Geteuid() == 0 {
+				t.Skip("root ignores file permissions")
+			}
+			resetAuthFlags(t)
+			srv := orgServer(t)
+			cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+			tt.write(t, cfgPath)
+			before, readErr := os.ReadFile(cfgPath)
+
+			_, _, err := runAuth(t, "auth", "login", "--config", cfgPath,
+				"--api-url", srv.URL, "--api-key", "new-key")
+
+			require.Error(t, err, "an unreadable config must not be silently replaced")
+			if readErr == nil {
+				after, err := os.ReadFile(cfgPath)
+				require.NoError(t, err)
+				assert.Equal(t, string(before), string(after), "the existing file must be byte-identical")
+			}
+		})
+	}
+}
+
+// The key travels as a bearer token, so a cleartext endpoint leaks it on every
+// request. Loopback is exempt because a locally-run API never leaves the host.
+func TestAuthLogin_RejectsCleartextNonLoopbackURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{name: "remote http", url: "http://api.example.com", wantErr: true},
+		{name: "remote http with port", url: "http://10.0.0.5:8080", wantErr: true},
+		{name: "no scheme", url: "api.example.com", wantErr: true},
+		{name: "localhost", url: "http://localhost:8080"},
+		{name: "ipv4 loopback", url: "http://127.0.0.1:8080"},
+		{name: "ipv6 loopback", url: "http://[::1]:8080"},
+		{name: "https remote", url: "https://api.example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetAuthFlags(t)
+			cfgPath, before := seedConfig(t, "https://old.example.com", "good-existing-key")
+
+			_, _, err := runAuth(t, "auth", "login", "--config", cfgPath,
+				"--api-url", tt.url, "--api-key", "new-key")
+
+			after, readErr := os.ReadFile(cfgPath)
+			require.NoError(t, readErr)
+			if !tt.wantErr {
+				// Every allowed URL here is unreachable, so the run lands on the
+				// transport path: saved with a warning, which is the point.
+				assert.NotEqual(t, before, string(after), "an allowed URL must still reach the save path")
+				return
+			}
+			require.Error(t, err, "%s must be rejected before any request is made", tt.url)
+			assert.Equal(t, exitUsage, exitCodeFor(err), "a bad --api-url is a usage error")
+			assert.Equal(t, before, string(after), "a rejected URL must leave the config untouched")
+		})
+	}
+}
+
+// A server that answered but did not authenticate the key is not the same as an
+// unreachable one: it proves the key is unusable, so it must not be persisted.
+func TestAuthLogin_ServerErrorDoesNotPersistKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "rate limited", status: http.StatusTooManyRequests, body: `{"error":{"code":"RATE_LIMITED","message":"slow down"}}`},
+		{name: "server error", status: http.StatusInternalServerError, body: `{"error":{"code":"INTERNAL","message":"boom"}}`},
+		{name: "forbidden", status: http.StatusForbidden, body: `{"error":{"code":"FORBIDDEN","message":"nope"}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetAuthFlags(t)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+			cfgPath, before := seedConfig(t, srv.URL, "good-existing-key")
+
+			_, _, err := runAuth(t, "auth", "login", "--config", cfgPath, "--api-key", "new-key")
+
+			require.Error(t, err, "HTTP %d must not be reported as a successful login", tt.status)
+			after, readErr := os.ReadFile(cfgPath)
+			require.NoError(t, readErr)
+			assert.Equal(t, before, string(after),
+				"a key the server refused to accept must not replace a working one")
+		})
+	}
+}
+
+// os.Stdin bypasses cmd.SetIn, so an embedded caller or a table test could not
+// supply the key at all.
+func TestAuthLogin_ReadsKeyFromCommandInput(t *testing.T) {
+	resetAuthFlags(t)
+	srv := orgServer(t)
+	cfgPath, _ := seedConfig(t, srv.URL, "")
+
+	rootCmd.SetIn(strings.NewReader("key-from-cmd-in\n"))
+	t.Cleanup(func() { rootCmd.SetIn(nil) })
+
+	stdout, _, err := runAuth(t, "auth", "login", "--config", cfgPath)
+	require.NoError(t, err)
+	assert.Contains(t, stdout, cfgPath)
+
+	saved, readErr := os.ReadFile(cfgPath)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(saved), "key-from-cmd-in",
+		"the key supplied through cmd.SetIn must be the one persisted")
+}
+
 // Defect 7: extra positional args are a usage error, not a silent success.
 func TestAuth_RejectsExtraArgs(t *testing.T) {
 	tests := []struct {
@@ -355,6 +496,34 @@ func TestAuthStatus_UnauthorizedStillEmitsCompleteJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	assert.Equal(t, "unauthorized", got["status"])
 	assert.Equal(t, "abcd...wxyz", got["api_key_masked"])
+}
+
+// A client that cannot even be constructed is the one failure that used to
+// return before rendering, so the caller got an exit code and an empty report -
+// exactly the case the diagnostic exists for.
+func TestAuthStatus_ClientBuildFailureStillEmitsReport(t *testing.T) {
+	resetAuthFlags(t)
+	srv := orgServer(t)
+	cfgPath, _ := seedConfig(t, srv.URL, "abcd12345678wxyz")
+
+	// No RunContext: effectiveConfig falls back to the file and finds a key,
+	// then newAPIClientFromCmd has nothing to build a client from.
+	cfgFile = cfgPath
+	outputFmt = formatJSON
+	var stdout bytes.Buffer
+	authStatusCmd.SetOut(&stdout)
+	authStatusCmd.SetErr(&bytes.Buffer{})
+	authStatusCmd.SetContext(t.Context())
+
+	err := authStatusCmd.RunE(authStatusCmd, nil)
+
+	require.Error(t, err, "an unusable client must still exit non-zero")
+	require.True(t, json.Valid(stdout.Bytes()), "the report must still be emitted: %q", stdout.String())
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &got))
+	assert.Equal(t, "error", got["status"])
+	assert.Equal(t, "abcd...wxyz", got["api_key_masked"])
+	assert.NotEmpty(t, got["error"], "the report must say why the client could not be built")
 }
 
 // Defect 12: any config.Load failure was reported as "No stored credentials

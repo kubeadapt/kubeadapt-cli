@@ -28,6 +28,9 @@ var getTeamsCmd = &cobra.Command{
 
 		deptIDs, _ := cmd.Flags().GetStringSlice("department-id")
 		origins, _ := cmd.Flags().GetStringSlice("origin")
+		if err := validateEnumSlice("origin", origins, originValues); err != nil {
+			return err
+		}
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Team, *types.Meta, error) {
 			return c.ListTeams(ctx, api.TeamFilter{
@@ -48,6 +51,6 @@ var getTeamsCmd = &cobra.Command{
 func init() {
 	getTeamsCmd.Flags().StringSlice("department-id", nil, "Filter by department ID (repeatable)")
 	getTeamsCmd.Flags().StringSlice("origin", nil, "Filter by origin: k8s (auto-discovered from K8s labels) or kubeadapt (created in dashboard) (repeatable)")
-	registerEnumFlag(getTeamsCmd, "origin", "k8s", "kubeadapt")
+	registerEnumFlag(getTeamsCmd, "origin", originValues...)
 	getCmd.AddCommand(getTeamsCmd)
 }

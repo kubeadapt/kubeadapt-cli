@@ -27,6 +27,9 @@ var getDepartmentsCmd = &cobra.Command{
 		}
 
 		origins, _ := cmd.Flags().GetStringSlice("origin")
+		if err := validateEnumSlice("origin", origins, originValues); err != nil {
+			return err
+		}
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Department, *types.Meta, error) {
 			return c.ListDepartments(ctx, api.DepartmentFilter{
@@ -45,6 +48,6 @@ var getDepartmentsCmd = &cobra.Command{
 
 func init() {
 	getDepartmentsCmd.Flags().StringSlice("origin", nil, "Filter by origin: k8s (auto-discovered from K8s labels) or kubeadapt (created in dashboard) (repeatable)")
-	registerEnumFlag(getDepartmentsCmd, "origin", "k8s", "kubeadapt")
+	registerEnumFlag(getDepartmentsCmd, "origin", originValues...)
 	getCmd.AddCommand(getDepartmentsCmd)
 }

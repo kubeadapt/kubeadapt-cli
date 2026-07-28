@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
@@ -57,6 +59,22 @@ type PagedFlags struct {
 	Paginate     bool
 	IncludeTotal bool
 	MaxWait      time.Duration
+}
+
+// Shared by the completion registration and the RunE check so the two can
+// never drift into accepting different sets.
+var originValues = []string{"k8s", "kubeadapt"}
+
+// registerEnumFlag only wires shell completion, which a scripted or hand-typed
+// value never passes through. Repeatable enum flags still need checking here so
+// a typo is a usage error rather than an opaque API rejection.
+func validateEnumSlice(flag string, values, allowed []string) error {
+	for _, v := range values {
+		if !slices.Contains(allowed, v) {
+			return usagef("invalid --%s %q (must be one of: %s)", flag, v, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
 }
 
 func isValidCostMode(s string) bool {

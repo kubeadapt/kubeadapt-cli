@@ -1,8 +1,9 @@
 package types
 
 // Organization is the tenant-level snapshot. Its cost block rejects ?cost_mode=
-// and omits cost.cost_mode - the org bill is one physical number; mode applies
-// only to per-cluster/per-team rollups.
+// and omits cost.cost_mode - the org bill is one physical number. Mode applies
+// to the attribution rollups (namespaces, workloads, teams, departments, and
+// the org dashboard); the cluster endpoint rejects it too.
 type Organization struct {
 	ID          string                  `json:"id"`
 	Kind        string                  `json:"kind"`

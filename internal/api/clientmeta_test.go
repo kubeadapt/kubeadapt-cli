@@ -37,9 +37,10 @@ func TestResolveRequestID_ToleratesGarbageBody(t *testing.T) {
 
 // A released binary reporting itself as "dev" makes server-side version
 // analytics useless and hides which CLI build produced a bad request.
+//
+// Deliberately not parallel: this mutates the package-level version.Version,
+// and every request in this package reads it through buildUserAgent.
 func TestUserAgent_CarriesBuildVersion(t *testing.T) {
-	t.Parallel()
-
 	assert.Contains(t, buildUserAgent(), version.Version)
 
 	// Proves derivation rather than a coincidental literal: a local build's
