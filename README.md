@@ -78,7 +78,10 @@ Environment variables override the config file:
 | `KUBEADAPT_NO_UPDATE_CHECK` | Any non-empty value disables the update check |
 
 `kubeadapt auth login` writes the config atomically with `0600` permissions, and
-verifies the key before writing anything.
+verifies the key before writing anything. Every command warns on stderr if the
+config file holds a key that other users can read. A file passed with
+`--config` must exist, and a config file that does not parse is an error rather
+than being ignored.
 
 ## More
 
@@ -88,8 +91,6 @@ verifies the key before writing anything.
   early exits non-zero and prints a resume cursor.
 - **Cost mode:** `--cost-mode fully_loaded` (default) or `workload_only` on the
   endpoints that support cost attribution.
-- **Unrecognized filters:** the CLI warns on stderr when the API ignores a query
-  parameter, because the result set is unfiltered rather than empty.
 - **Shell completions:** `kubeadapt completion bash|zsh|fish`.
 - **Global flags:** `--api-key`, `--api-url`, `-o/--output`, `--no-color`,
   `-v/--verbose`, `-q/--quiet`, `--config`.
