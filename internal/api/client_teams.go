@@ -32,7 +32,7 @@ func (c *Client) ListTeams(
 	setCostMode(params, f.CostMode)
 	setCSV(params, "department_id", f.DepartmentIDs)
 	setCSV(params, "origin", f.Origins)
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Team](ctx, c, "/v1/teams", params)
 }
 
@@ -41,7 +41,7 @@ func (c *Client) GetTeam(
 ) (*types.Team, *types.Meta, error) {
 	params := url.Values{}
 	setCostMode(params, opts.CostMode)
-	return DoEnvelopeGet[*types.Team](ctx, c, "/v1/teams/"+teamID, params)
+	return DoEnvelopeGet[*types.Team](ctx, c, "/v1/teams/"+url.PathEscape(teamID), params)
 }
 
 func (c *Client) ListTeamAssignments(
@@ -55,6 +55,6 @@ func (c *Client) ListTeamAssignments(
 	if f.Source != "" {
 		params.Set("source", f.Source)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
-	return DoEnvelopeGet[[]types.TeamAssignment](ctx, c, "/v1/teams/"+teamID+"/assignments", params)
+	params = appendCursorParams(params, f.PagedOpts)
+	return DoEnvelopeGet[[]types.TeamAssignment](ctx, c, "/v1/teams/"+url.PathEscape(teamID)+"/assignments", params)
 }

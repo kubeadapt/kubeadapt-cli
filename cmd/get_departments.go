@@ -27,22 +27,18 @@ var getDepartmentsCmd = &cobra.Command{
 		}
 
 		origins, _ := cmd.Flags().GetStringSlice("origin")
-		if err := validateEnumSlice("origin", origins, originValues); err != nil {
-			return err
-		}
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Department, *types.Meta, error) {
 			return c.ListDepartments(ctx, api.DepartmentFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:   paged.pageOpts(cursor),
 				CostModeOpt: api.CostModeOpt{CostMode: paged.CostMode},
 				Origins:     origins,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderDepartments)
+		order := costDesc(func(d types.Department) (types.Money, string, string) {
+			return d.Cost.CurrentRunRateHourly, d.ID, ""
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderDepartments, order)
 	},
 }
 

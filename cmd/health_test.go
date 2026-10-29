@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -23,10 +24,13 @@ func closeIdleConns(t *testing.T) {
 	})
 }
 
+// An empty config file keeps the developer's real one out of the run; it has
+// to exist, because a --config that names a missing file is an error.
 func healthArgs(t *testing.T, serverURL string, extra ...string) []string {
 	t.Helper()
-	args := []string{"health", "--api-url", serverURL, "--config", filepath.Join(t.TempDir(), "absent.yaml")}
-	return append(args, extra...)
+	cfg := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(cfg, nil, 0600))
+	return append([]string{"health", "--api-url", serverURL, "--config", cfg}, extra...)
 }
 
 func TestHealth_JSONOutput(t *testing.T) {

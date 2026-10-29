@@ -34,17 +34,16 @@ API. Filter via team-assignments or department-assignments queries instead.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Namespace, *types.Meta, error) {
 			return c.ListNamespaces(ctx, api.NamespaceFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:     paged.pageOpts(cursor),
 				CostModeOpt:   api.CostModeOpt{CostMode: paged.CostMode},
 				ClusterIDs:    clusterIDs,
 				MinCostHourly: minCost,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderNamespaces)
+		order := costDesc(func(n types.Namespace) (types.Money, string, string) {
+			return n.Cost.CurrentRunRateHourly, n.ID, n.Metadata.Cluster.ID
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderNamespaces, order)
 	},
 }
 

@@ -25,7 +25,7 @@ func (c *Client) ListNamespaces(
 	ctx context.Context, f NamespaceFilter,
 ) ([]types.Namespace, *types.Meta, error) {
 	path, csvParam := pickScopedOrFlat(
-		func(id string) string { return "/v1/clusters/" + id + "/namespaces" },
+		func(id string) string { return "/v1/clusters/" + url.PathEscape(id) + "/namespaces" },
 		"/v1/namespaces",
 		f.ClusterIDs,
 	)
@@ -37,7 +37,7 @@ func (c *Client) ListNamespaces(
 	if f.MinCostHourly != "" {
 		params.Set("min_cost_hourly", f.MinCostHourly)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Namespace](ctx, c, path, params)
 }
 
@@ -46,6 +46,6 @@ func (c *Client) GetNamespace(
 ) (*types.Namespace, *types.Meta, error) {
 	params := url.Values{}
 	setCostMode(params, opts.CostMode)
-	path := "/v1/clusters/" + clusterID + "/namespaces/" + namespace
+	path := "/v1/clusters/" + url.PathEscape(clusterID) + "/namespaces/" + url.PathEscape(namespace)
 	return DoEnvelopeGet[*types.Namespace](ctx, c, path, params)
 }

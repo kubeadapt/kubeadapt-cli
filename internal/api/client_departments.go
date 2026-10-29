@@ -23,7 +23,7 @@ func (c *Client) ListDepartments(
 	params := url.Values{}
 	setCostMode(params, f.CostMode)
 	setCSV(params, "origin", f.Origins)
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Department](ctx, c, "/v1/departments", params)
 }
 
@@ -32,5 +32,5 @@ func (c *Client) GetDepartment(
 ) (*types.Department, *types.Meta, error) {
 	params := url.Values{}
 	setCostMode(params, opts.CostMode)
-	return DoEnvelopeGet[*types.Department](ctx, c, "/v1/departments/"+deptID, params)
+	return DoEnvelopeGet[*types.Department](ctx, c, "/v1/departments/"+url.PathEscape(deptID), params)
 }

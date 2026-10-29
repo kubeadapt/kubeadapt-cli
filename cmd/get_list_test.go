@@ -5,9 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
+	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
 	"github.com/kubeadapt/kubeadapt-cli/internal/config"
 	"github.com/kubeadapt/kubeadapt-cli/internal/testutil"
 	"github.com/spf13/cobra"
@@ -181,6 +184,7 @@ func TestCostModeRejection_StillLocalAndPreservesMessage(t *testing.T) {
 			assert.Empty(t, server.Requests(),
 				"the rejection is known locally; spending a round-trip to learn it wastes the rate budget")
 
+			assert.Equal(t, exitUsage, exitCodeFor(err))
 			rejection, ok := errors.AsType[*api.CostModeUnsupportedError](err)
 			require.True(t, ok, "each site must reuse the API's contract, not restate it inline")
 			assert.Equal(t, tc.endpoint, rejection.Endpoint)
@@ -237,6 +241,8 @@ func TestScopeCommands_ClusterIDRejectsMultipleValues(t *testing.T) {
 	}{
 		{name: "namespace", cmd: getNamespaceCmd, args: []string{"default"}},
 		{name: "node-group", cmd: getNodeGroupCmd, args: []string{"general-purpose"}},
+		{name: "workload", cmd: getWorkloadCmd, args: []string{workloadUIDForPods}},
+		{name: "pods", cmd: getPodsCmd, args: []string{workloadUIDForPods}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -246,8 +252,10 @@ func TestScopeCommands_ClusterIDRejectsMultipleValues(t *testing.T) {
 			require.NoError(t, tt.cmd.Flags().Set("cluster-id", clusterIDSecond))
 
 			err := tt.cmd.RunE(tt.cmd, tt.args)
-			require.Error(t, err, "a %s lives in exactly one cluster", tt.name)
+			require.Error(t, err, "%s takes one cluster at most", tt.name)
 			assert.Contains(t, err.Error(), "exactly one")
+			assert.Equal(t, exitUsage, exitCodeFor(err))
+			assert.Empty(t, server.Requests(), "the rejection is local")
 		})
 	}
 }
@@ -274,6 +282,8 @@ func TestClusterIDFlag_ScopeCommandsDocumentTheSingleValueRule(t *testing.T) {
 	scopes := map[string]*cobra.Command{
 		"namespace":  getNamespaceCmd,
 		"node-group": getNodeGroupCmd,
+		"workload":   getWorkloadCmd,
+		"pods":       getPodsCmd,
 	}
 	for name, c := range scopes {
 		f := c.Flags().Lookup("cluster-id")
@@ -305,31 +315,6 @@ func TestSeverityFlags_ShareOneOrdering(t *testing.T) {
 	assert.Contains(t, risk.Usage, order)
 	assert.Contains(t, priority.Usage, order,
 		"risk-level and priority describe the same severity scale and must not invert it")
-}
-
-func TestOriginFlag_RejectsValueTheAPIWouldNotAccept(t *testing.T) {
-	cmds := map[string]*cobra.Command{
-		"departments": getDepartmentsCmd,
-		"teams":       getTeamsCmd,
-	}
-	for name, c := range cmds {
-		t.Run(name+"/invalid", func(t *testing.T) {
-			server := testutil.NewMockServer(t)
-			newListHarness(t, c, server.URL, formatJSON, map[string]string{"origin": "K8s"})
-
-			err := c.RunE(c, nil)
-
-			require.Error(t, err, "a misspelled --origin must not be sent to the API")
-			assert.Equal(t, exitUsage, exitCodeFor(err), "a bad enum value is a usage error")
-			assert.Contains(t, err.Error(), "k8s, kubeadapt", "the message must list the accepted values")
-		})
-		t.Run(name+"/valid", func(t *testing.T) {
-			server := testutil.NewMockServer(t)
-			newListHarness(t, c, server.URL, formatJSON, map[string]string{"origin": "kubeadapt"})
-
-			assert.NoError(t, c.RunE(c, nil), "a documented --origin value must still be accepted")
-		})
-	}
 }
 
 // The harness restores flags by value, and pflag's slice values append rather
@@ -380,4 +365,39 @@ func TestTriStateBoolFlags_AreDocumentedAsTriState(t *testing.T) {
 				"--%s=false differs from omitting it; that has to be discoverable", tc.flag)
 		})
 	}
+}
+
+func TestPaginate_WalksByIDAndKeepsCostOrder(t *testing.T) {
+	workload := func(id, cost string) types.Workload {
+		var w types.Workload
+		w.ID = id
+		w.Cost.CurrentRunRateHourly = types.Money{Amount: cost, Currency: "USD"}
+		return w
+	}
+	pages := map[string][]types.Workload{
+		"":      {workload("a", "1.0000")},
+		"page2": {workload("b", "5.0000")},
+	}
+	var sorts []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		sorts = append(sorts, q.Get("sort"))
+		pag := types.Pagination{Limit: 1}
+		if q.Get("cursor") == "" {
+			pag.HasMore, pag.NextCursor = true, "page2"
+		}
+		testutil.WritePaginated(w, pages[q.Get("cursor")], types.Meta{}, pag)
+	}))
+	t.Cleanup(server.Close)
+
+	h := newListHarness(t, getWorkloadsCmd, server.URL, formatJSON, map[string]string{
+		flagPaginate: "true", flagLimit: "1",
+	})
+	require.NoError(t, getWorkloadsCmd.RunE(getWorkloadsCmd, nil))
+
+	assert.Equal(t, []string{"id", "id"}, sorts, "a walk must not key on a cost that moves between pages")
+	var out struct{ Data []types.Workload }
+	require.NoError(t, json.Unmarshal(h.stdout.Bytes(), &out))
+	require.Len(t, out.Data, 2)
+	assert.Equal(t, []string{"b", "a"}, []string{out.Data[0].ID, out.Data[1].ID}, "output keeps the cost order")
 }

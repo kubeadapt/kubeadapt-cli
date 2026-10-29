@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,12 +22,20 @@ import (
 const (
 	defaultTimeout = 30 * time.Second
 
-	errorBodyLimit = 200
+	// A full page at the maximum --limit is a few MiB.
+	maxResponseBytes  = 32 << 20
+	maxErrorBodyBytes = 64 << 10
+
+	// net/http's default, which a custom CheckRedirect replaces.
+	maxRedirects = 10
+
+	schemeHTTPS = "https"
 )
 
 // The zero Client is not usable; construct it via NewClient.
 type Client struct {
 	baseURL    string
+	baseURLErr error
 	apiKey     string
 	httpClient *http.Client
 	logger     *zap.Logger
@@ -92,7 +102,7 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: defaultTimeout},
+		httpClient: &http.Client{Timeout: defaultTimeout, CheckRedirect: refuseCleartextRedirect},
 		logger:     zap.NewNop(),
 		retryOnRL:  false,
 		maxRetries: 1,
@@ -102,7 +112,47 @@ func NewClient(baseURL, apiKey string, opts ...Option) *Client {
 	for _, opt := range opts {
 		opt(c)
 	}
+	c.baseURLErr = CheckBaseURL(c.baseURL)
 	return c
+}
+
+// CheckBaseURL rejects an API URL that would carry the bearer token in
+// cleartext. Loopback is exempt: a locally run API never puts the key on a
+// network, and refusing it would break local development.
+func CheckBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid API URL %q: %w", raw, err)
+	}
+	switch {
+	case u.Host == "" || (u.Scheme != schemeHTTPS && u.Scheme != "http"):
+		return fmt.Errorf("invalid API URL %q (expected https://<host>)", raw)
+	case u.Scheme == schemeHTTPS, isLoopbackHost(u.Hostname()):
+		return nil
+	}
+	return fmt.Errorf("refusing to send the API key in cleartext to %q. "+
+		"Use https://, or http:// with a loopback host (localhost, 127.0.0.1, ::1) for local development", raw)
+}
+
+// net/http re-sends the Authorization header on a same-host redirect whatever
+// the scheme, so an https -> http hop would put the key on the wire in
+// cleartext. Such a redirect is refused under the same rule as the base URL.
+func refuseCleartextRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	if req.URL.Scheme != schemeHTTPS && !isLoopbackHost(req.URL.Hostname()) {
+		return fmt.Errorf("refusing to follow a redirect to %q: it would send the API key in cleartext", req.URL.Redacted())
+	}
+	return nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // The returned snapshot is a copy and safe to retain.
@@ -115,6 +165,9 @@ func (c *Client) RateLimit() RateLimit {
 // a plain wrapped error.
 func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params url.Values) (T, *types.Meta, error) {
 	var zero T
+	if c.baseURLErr != nil {
+		return zero, nil, c.baseURLErr
+	}
 
 	fullURL := c.baseURL + path
 	if len(params) > 0 {
@@ -145,7 +198,11 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 
 		c.rateLimit.captureFromHeaders(resp.Header)
 
-		body, readErr := io.ReadAll(resp.Body)
+		limit := int64(maxResponseBytes)
+		if resp.StatusCode >= 400 {
+			limit = maxErrorBodyBytes
+		}
+		body, oversized, readErr := readLimited(resp.Body, limit)
 		_ = resp.Body.Close()
 		if readErr != nil {
 			return zero, nil, fmt.Errorf("reading response: %w", readErr)
@@ -170,8 +227,21 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 			continue
 		}
 
+		// After a redirect, resp.Request names the host that answered.
+		host := req.URL.Host
+		if resp.Request != nil {
+			host = resp.Request.URL.Host
+		}
+		if oversized && resp.StatusCode < 400 {
+			return zero, nil, fmt.Errorf("response from %s is larger than %d MiB; try a smaller --limit",
+				host, maxResponseBytes>>20)
+		}
+
 		var env types.Envelope[T]
-		decodeErr := json.Unmarshal(body, &env)
+		var decodeErr error
+		if !oversized {
+			decodeErr = json.Unmarshal(body, &env)
+		}
 
 		if env.Error != nil {
 			apiErr := &APIError{
@@ -187,13 +257,10 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 		}
 
 		if resp.StatusCode >= 400 {
-			excerpt := string(body)
-			if len(excerpt) > errorBodyLimit {
-				excerpt = excerpt[:errorBodyLimit]
-			}
 			apiErr := &APIError{
-				StatusCode: resp.StatusCode,
-				Message:    excerpt,
+				StatusCode:  resp.StatusCode,
+				Message:     unexpectedResponse(host, resp),
+				NotEnvelope: true,
 			}
 			if resp.StatusCode == http.StatusTooManyRequests {
 				apiErr.Code = CodeRateLimited
@@ -210,20 +277,46 @@ func DoEnvelopeGet[T any](ctx context.Context, c *Client, path string, params ur
 	}
 }
 
+// readLimited reads at most limit bytes and reports whether the body was
+// longer, so an oversized response is refused rather than silently truncated.
+func readLimited(r io.Reader, limit int64) (body []byte, oversized bool, err error) {
+	body, err = io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if int64(len(body)) > limit {
+		return body[:limit], true, nil
+	}
+	return body, false, nil
+}
+
+// Describes a reply that is not an API error envelope. The body is not quoted:
+// it comes from a proxy or a wrong --api-url, often as HTML.
+func unexpectedResponse(host string, resp *http.Response) string {
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || mediaType == "" {
+		return fmt.Sprintf("unexpected response from %s (HTTP %d)", host, resp.StatusCode)
+	}
+	return fmt.Sprintf("unexpected response from %s (HTTP %d, %s)", host, resp.StatusCode, mediaType)
+}
+
 // A nil params map is allocated lazily, so callers may pass nil. limit<=0 omits
 // the limit param.
-func appendCursorParams(params url.Values, cursor string, limit int, includeTotal bool) url.Values {
+func appendCursorParams(params url.Values, p PagedOpts) url.Values {
 	if params == nil {
 		params = url.Values{}
 	}
-	if cursor != "" {
-		params.Set("cursor", cursor)
+	if p.Cursor != "" {
+		params.Set("cursor", p.Cursor)
 	}
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
+	if p.Limit > 0 {
+		params.Set("limit", strconv.Itoa(p.Limit))
 	}
-	if includeTotal {
+	if p.IncludeTotal {
 		params.Set("include_total", "true")
+	}
+	if p.Sort != "" {
+		params.Set("sort", p.Sort)
 	}
 	return params
 }

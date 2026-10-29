@@ -47,12 +47,12 @@ func (c *Client) ListRecommendations(
 	if f.MinSavingsHourly != "" {
 		params.Set("min_savings_hourly", f.MinSavingsHourly)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Recommendation](ctx, c, "/v1/recommendations", params)
 }
 
 func (c *Client) GetRecommendation(
 	ctx context.Context, recID string,
 ) (*types.Recommendation, *types.Meta, error) {
-	return DoEnvelopeGet[*types.Recommendation](ctx, c, "/v1/recommendations/"+recID, nil)
+	return DoEnvelopeGet[*types.Recommendation](ctx, c, "/v1/recommendations/"+url.PathEscape(recID), nil)
 }

@@ -63,4 +63,5 @@ type ClusterCounts struct {
 type ClusterCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	LastUpdatedAt        string `json:"last_updated_at,omitempty"`
+	CostVector
 }

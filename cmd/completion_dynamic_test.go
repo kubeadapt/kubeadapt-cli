@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,13 +225,13 @@ func TestCompletion_StaticEnumFlags(t *testing.T) {
 		{getRecommendationsCmd, "recommendation-type", []string{"workload_rightsizing"}},
 		{getRecommendationsCmd, "resource-type", []string{"Deployment", "StatefulSet", "DaemonSet", "Pod", "Node"}},
 		{getNodesCmd, "architecture", []string{"amd64", "arm64"}},
-		{getNodesCmd, "capacity-type", []string{"on-demand", "spot"}},
+		{getNodesCmd, "capacity-type", []string{"on-demand", "spot", "reserved", "karpenter"}},
 		{getPodsCmd, "phase", []string{"Pending", "Running", "Succeeded", "Failed", "Unknown"}},
 		{getPodsCmd, "qos-class", []string{"Guaranteed", "Burstable", "BestEffort"}},
 		{getWorkloadsCmd, "kind", []string{"Deployment", "StatefulSet", "DaemonSet"}},
 		{getTeamsCmd, "origin", []string{"k8s", "kubeadapt"}},
 		{getDepartmentsCmd, "origin", []string{"k8s", "kubeadapt"}},
-		{getTeamAssignmentsCmd, "entity-type", []string{"namespace", "workload", "cluster"}},
+		{getTeamAssignmentsCmd, "entity-type", []string{"workload", "namespace", "pv"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.cmd.Name()+"/"+tc.flag, func(t *testing.T) {
@@ -240,6 +241,14 @@ func TestCompletion_StaticEnumFlags(t *testing.T) {
 			got, directive := fn(tc.cmd, nil, "")
 			assert.Equal(t, tc.want, got)
 			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+
+			t.Cleanup(func() { resetFlags(tc.cmd) })
+			tc.cmd.Flags().AddFlagSet(tc.cmd.PersistentFlags()) // as cobra does when parsing
+			require.NoError(t, tc.cmd.Flags().Set(tc.flag, tc.want[0]+",bogus"))
+			err := validateEnumFlags(tc.cmd)
+			require.Error(t, err, "a value outside the set must not reach the API")
+			assert.Equal(t, exitUsage, exitCodeFor(err))
+			assert.Contains(t, err.Error(), strings.Join(tc.want, ", "))
 		})
 	}
 }

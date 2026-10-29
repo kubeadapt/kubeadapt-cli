@@ -17,7 +17,7 @@ func (c *Client) ListNodeGroups(
 	ctx context.Context, f NodeGroupFilter,
 ) ([]types.NodeGroup, *types.Meta, error) {
 	path, csvParam := pickScopedOrFlat(
-		func(id string) string { return "/v1/clusters/" + id + "/node-groups" },
+		func(id string) string { return "/v1/clusters/" + url.PathEscape(id) + "/node-groups" },
 		"/v1/node-groups",
 		f.ClusterIDs,
 	)
@@ -25,13 +25,13 @@ func (c *Client) ListNodeGroups(
 	if csvParam != "" {
 		params.Set("cluster_id", csvParam)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.NodeGroup](ctx, c, path, params)
 }
 
 func (c *Client) GetNodeGroup(
 	ctx context.Context, clusterID, name string,
 ) (*types.NodeGroup, *types.Meta, error) {
-	path := "/v1/clusters/" + clusterID + "/node-groups/" + name
+	path := "/v1/clusters/" + url.PathEscape(clusterID) + "/node-groups/" + url.PathEscape(name)
 	return DoEnvelopeGet[*types.NodeGroup](ctx, c, path, nil)
 }

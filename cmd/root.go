@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,18 +77,31 @@ var rootCmd = &cobra.Command{
 		if err := validateOutputFmt(outputFmt); err != nil {
 			return err
 		}
+		if err := validateEnumFlags(cmd); err != nil {
+			return err
+		}
 		// https://no-color.org - any non-empty value disables color.
 		colorDisabled := noColor || os.Getenv("NO_COLOR") != ""
 		output.SetNoColor(colorDisabled)
 		output.SetQuiet(quiet)
 
-		if cmd.Name() == "login" || cmd.Name() == "version" || cmd.Name() == "completion" {
+		// login and logout read and write the file themselves; logout in
+		// particular treats a missing file as "nothing to remove", not an error.
+		switch cmd.Name() {
+		case "login", "logout", "version", "completion":
 			return nil
 		}
 
-		cfg, err := config.Load(cfgFile)
+		cfg, err := config.LoadOrDefault(cfgFile)
 		if err != nil {
-			cfg = config.Default()
+			if _, missing := errors.AsType[*config.MissingFileError](err); missing {
+				return asUsageError(err)
+			}
+			return err
+		}
+		// The file exposes its key even when a flag or env var overrides it.
+		if warning := config.KeyExposureWarning(resolvedConfigPath(), cfg); warning != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), warning)
 		}
 
 		// Resolution order (first non-empty wins): CLI flag > env var > config file.
@@ -170,9 +184,10 @@ func init() {
 		return asUsageError(err)
 	})
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.kubeadapt/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default: "+configPathForHelp()+")")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "Kubeadapt API URL")
-	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "Kubeadapt API key")
+	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "",
+		"Kubeadapt API key (prefer KUBEADAPT_API_KEY or 'kubeadapt auth login'; a flag value shows in shell history and ps)")
 	rootCmd.PersistentFlags().StringVarP(&outputFmt, "output", "o", "table", "Output format (table|json|yaml)")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")

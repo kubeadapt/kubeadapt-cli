@@ -27,4 +27,5 @@ type TeamMetadata struct {
 type TeamCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`
+	CostVector
 }

@@ -136,6 +136,18 @@ func friendlyError(err error) string {
 }
 
 func apiErrorMessage(e *api.APIError) string {
+	if resource, clusters, ok := api.AmbiguousUIDClusters(e); ok {
+		return ambiguousUIDMessage(resource, clusters)
+	}
+	if api.IsNoClusterInScope(e) {
+		return "Access denied: this API key has no cluster in scope for the request.\n" +
+			"  Check which clusters the key may read at https://app.kubeadapt.io/settings/api-keys"
+	}
+	// A 429 from a proxy still means slow down, so it keeps the rate-limit text.
+	if e.NotEnvelope && !e.IsRateLimited() {
+		return e.Message + "\n  Check the API URL (--api-url, KUBEADAPT_API_URL or the config file), or try again later."
+	}
+
 	var msg string
 	switch {
 	case e.IsAuthError():
@@ -147,12 +159,33 @@ func apiErrorMessage(e *api.APIError) string {
 			e.Message, notFoundHint(e.Code))
 	case e.IsRateLimited():
 		msg = rateLimitMessage(e.RetryAfter)
+	case e.Code == api.CodeRateLimitUnavailable:
+		msg = "Kubeadapt API error: the API cannot check rate limits right now, so it is refusing requests.\n  Try again in a minute."
+	case e.Code == api.CodeUpstreamUnavailable:
+		msg = "Kubeadapt API error: a service behind the API is unavailable.\n  Try again shortly, or check https://status.kubeadapt.io."
+	case e.Code == api.CodeUpstreamTimeout:
+		msg = "Kubeadapt API error: the request timed out inside the API.\n  Try again; for a list, a smaller --limit may help."
 	case e.IsServerError():
 		msg = "Kubeadapt API error: the service is experiencing issues.\n  Check https://status.kubeadapt.io or try again later."
 	default:
 		msg = fmt.Sprintf("API error (HTTP %d): %s", e.StatusCode, e.Message)
 	}
 	return msg + formatDetails(e.Details)
+}
+
+// Each ID goes on its own line as a ready-to-paste flag.
+func ambiguousUIDMessage(resource string, clusterIDs []string) string {
+	var b strings.Builder
+	b.WriteString("This " + resource + " UID exists in more than one cluster. Pick one with --cluster-id")
+	if len(clusterIDs) == 0 {
+		b.WriteString(".")
+		return b.String()
+	}
+	b.WriteString(":")
+	for _, id := range clusterIDs {
+		b.WriteString("\n  --cluster-id " + id)
+	}
+	return b.String()
 }
 
 func notFoundHint(code api.ErrorCode) string {

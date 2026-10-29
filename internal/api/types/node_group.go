@@ -49,4 +49,5 @@ type NodeGroupCost struct {
 	CurrentRunRateHourly        Money  `json:"current_run_rate_hourly"`
 	SpotSavingsVsOndemandHourly *Money `json:"spot_savings_vs_ondemand_hourly,omitempty"`
 	LastUpdatedAt               string `json:"last_updated_at,omitempty"`
+	CostVector
 }

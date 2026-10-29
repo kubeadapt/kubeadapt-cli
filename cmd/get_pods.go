@@ -14,12 +14,17 @@ var getPodsCmd = &cobra.Command{
 	Short: "List pods for a workload",
 	Long: `List pods that belong to the workload identified by k8s metadata.uid.
 Accepts pod-specific filters (phase, qos-class, host-path, empty-dir, host-network)
-and the standard pagination flags.`,
+and the standard pagination flags.
+
+The same UID can be registered in more than one cluster; pods from every such
+cluster are listed, with the cluster ID in its own column. --cluster-id keeps
+one.`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: firstArgOnly(completeWorkloadUIDs),
 	Example: `  kubeadapt get pods 11111111-...-aaaaaa
   kubeadapt get pods 11111111-...-aaaaaa --phase Running --qos-class Burstable
-  kubeadapt get pods 11111111-...-aaaaaa --has-hostpath --paginate`,
+  kubeadapt get pods 11111111-...-aaaaaa --has-hostpath --paginate
+  kubeadapt get pods 11111111-...-aaaaaa --cluster-id 00000000-0000-0000-0000-000000000001`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newAPIClientFromCmd(cmd)
 		if err != nil {
@@ -30,6 +35,10 @@ and the standard pagination flags.`,
 			return err
 		}
 
+		clusterID, err := optionalClusterID(cmd)
+		if err != nil {
+			return err
+		}
 		namespaces, _ := cmd.Flags().GetStringSlice("namespace")
 		nodeUIDs, _ := cmd.Flags().GetStringSlice("node-uid")
 		phase, _ := cmd.Flags().GetString("phase")
@@ -40,12 +49,9 @@ and the standard pagination flags.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Pod, *types.Meta, error) {
 			return c.ListWorkloadPods(ctx, args[0], api.PodFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:   paged.pageOpts(cursor),
 				CostModeOpt: api.CostModeOpt{CostMode: paged.CostMode},
+				ClusterID:   clusterID,
 				Namespaces:  namespaces,
 				NodeUIDs:    nodeUIDs,
 				Phase:       phase,
@@ -55,11 +61,16 @@ and the standard pagination flags.`,
 				HostNetwork: hostNetwork,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderPods)
+		order := costDesc(func(p types.Pod) (types.Money, string, string) {
+			return p.Cost.CurrentRunRateHourly, p.ID, p.Metadata.Cluster.ID
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderPods, order)
 	},
 }
 
 func init() {
+	getPodsCmd.Flags().StringSlice("cluster-id", nil,
+		"Only list pods from this cluster, when the workload UID exists in more than one (exactly one)")
 	getPodsCmd.Flags().StringSlice("namespace", nil, "Filter by namespace (repeatable)")
 	getPodsCmd.Flags().StringSlice("node-uid", nil, "Filter by node UID (repeatable)")
 	getPodsCmd.Flags().String("phase", "", "Filter by pod phase (Pending|Running|Succeeded|Failed|Unknown)")
@@ -69,5 +80,6 @@ func init() {
 	getPodsCmd.Flags().Bool("host-network", false, "Filter pods with/without hostNetwork "+triStateSuffix)
 	registerEnumFlag(getPodsCmd, "phase", "Pending", "Running", "Succeeded", "Failed", "Unknown")
 	registerEnumFlag(getPodsCmd, "qos-class", "Guaranteed", "Burstable", "BestEffort")
+	registerClusterIDFlag(getPodsCmd)
 	getCmd.AddCommand(getPodsCmd)
 }

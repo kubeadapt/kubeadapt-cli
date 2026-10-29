@@ -53,7 +53,7 @@ flags (--limit, --cursor, --paginate, --include-total).`,
 				ClusterIDs: clusterIDs,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderNodeGroups)
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderNodeGroups, nil)
 	},
 }
 

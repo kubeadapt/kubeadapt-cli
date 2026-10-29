@@ -108,9 +108,20 @@ func staticCompletions(values ...string) cobra.CompletionFunc {
 	}
 }
 
-// The error is dropped deliberately: it fires only on a misspelled flag name,
-// which the flag's own usage-string tests already catch.
+// registerEnumFlag wires completion and records the accepted values, which
+// validateEnumFlags checks before any request is sent.
 func registerEnumFlag(cmd *cobra.Command, flag string, values ...string) {
+	f := cmd.Flags().Lookup(flag)
+	if f == nil {
+		f = cmd.PersistentFlags().Lookup(flag)
+	}
+	if f == nil {
+		panic("registerEnumFlag: unknown flag --" + flag)
+	}
+	if f.Annotations == nil {
+		f.Annotations = map[string][]string{}
+	}
+	f.Annotations[enumAnnotation] = values
 	_ = cmd.RegisterFlagCompletionFunc(flag, staticCompletions(values...))
 }
 

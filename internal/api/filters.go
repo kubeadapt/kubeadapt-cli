@@ -11,7 +11,12 @@ type PagedOpts struct {
 	Limit        int    // 0 means server default (100)
 	Cursor       string // empty means first page
 	IncludeTotal bool   // adds ?include_total=true (expensive)
+	Sort         string // SortByID or empty for the endpoint's default order
 }
+
+// SortByID orders a cost-sorted list by id, then cluster id. Unlike cost,
+// that key does not change between requests, so a cursor walk is complete.
+const SortByID = "id"
 
 // CostModeOpt is embedded only by endpoints accepting cost_mode. Validation
 // happens in the flag parser; the transport just forwards.

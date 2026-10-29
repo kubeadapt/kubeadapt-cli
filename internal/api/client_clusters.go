@@ -34,12 +34,12 @@ func (c *Client) ListClusters(
 	if f.Status != "" {
 		params.Set("status", f.Status)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Cluster](ctx, c, "/v1/clusters", params)
 }
 
 func (c *Client) GetCluster(
 	ctx context.Context, clusterID string,
 ) (*types.Cluster, *types.Meta, error) {
-	return DoEnvelopeGet[*types.Cluster](ctx, c, "/v1/clusters/"+clusterID, nil)
+	return DoEnvelopeGet[*types.Cluster](ctx, c, "/v1/clusters/"+url.PathEscape(clusterID), nil)
 }
