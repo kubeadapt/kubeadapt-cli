@@ -54,13 +54,23 @@ func rejectCostMode(cmd *cobra.Command, endpoint string) error {
 		return nil
 	}
 	mode, _ := cmd.Flags().GetString(flagCostMode)
-	return api.RejectCostMode(endpoint, mode)
+	return asUsageError(api.RejectCostMode(endpoint, mode))
 }
 
 // singleClusterID enforces the one-cluster contract for the detail commands.
 // They take --cluster-id as a StringSlice purely so the flag parses the same
 // way everywhere; a namespace or node group still lives in exactly one cluster.
 func singleClusterID(cmd *cobra.Command) (string, error) {
+	id, err := optionalClusterID(cmd)
+	if err == nil && id == "" {
+		return "", usagef("--cluster-id is required")
+	}
+	return id, err
+}
+
+// optionalClusterID is singleClusterID where the cluster only disambiguates a
+// UID; it returns "" when the flag is absent.
+func optionalClusterID(cmd *cobra.Command) (string, error) {
 	ids, err := cmd.Flags().GetStringSlice("cluster-id")
 	if err != nil {
 		return "", err
@@ -68,8 +78,8 @@ func singleClusterID(cmd *cobra.Command) (string, error) {
 	if len(ids) > 1 {
 		return "", usagef("--cluster-id accepts exactly one cluster ID here, got %d", len(ids))
 	}
-	if len(ids) == 0 || ids[0] == "" {
-		return "", usagef("--cluster-id is required")
+	if len(ids) == 0 {
+		return "", nil
 	}
 	return ids[0], nil
 }

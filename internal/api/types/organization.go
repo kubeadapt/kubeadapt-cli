@@ -52,6 +52,7 @@ type OrganizationCounts struct {
 type OrganizationCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	LastUpdatedAt        string `json:"last_updated_at,omitempty"`
+	CostVector
 }
 
 // OrganizationDashboard is the only endpoint exposing MTD and savings figures;
@@ -67,6 +68,7 @@ type OrganizationDashboard struct {
 type OrgDashboardMTD struct {
 	BilledCost Money                `json:"billed_cost"`
 	Calendar   OrgDashboardCalendar `json:"calendar"`
+	CostVector
 }
 
 type OrgDashboardCalendar struct {
@@ -79,10 +81,12 @@ type OrgDashboardCalendar struct {
 type OrgDashboardSavings struct {
 	CurrentHourlyPotential Money `json:"current_hourly_potential"`
 	RecommendationCount    int   `json:"recommendation_count"`
+	CostVector
 }
 
 type OrgDashboardClusterRollup struct {
 	Cluster              NestedRef `json:"cluster"`
 	CurrentRunRateHourly Money     `json:"current_run_rate_hourly"`
 	MonthToDateCost      Money     `json:"month_to_date_cost"`
+	CostVector
 }

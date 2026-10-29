@@ -236,6 +236,8 @@ func SamplePod() types.Pod {
 	}
 }
 
+// The last pod is reported by a second cluster registration, the shape a
+// workload UID registered in two clusters produces.
 func SamplePods() []types.Pod {
 	base := SamplePod()
 	uids := []string{podUIDOne, podUIDTwo, podUIDThree, podUIDFour, podUIDFive}
@@ -246,6 +248,7 @@ func SamplePods() []types.Pod {
 		p.Metadata.Name = "api-gateway-7f9b8c8d6f-aaaa" + string(rune('1'+i))
 		out = append(out, p)
 	}
+	out[len(out)-1].Metadata.Cluster = types.NestedRef{ID: clusterIDStaging, Name: "staging-cluster"}
 	return out
 }
 

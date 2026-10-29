@@ -5,12 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Cobra keeps parsed values on the shared command tree, so a --limit from one
@@ -45,7 +47,9 @@ func runRoot(t *testing.T, args ...string) (int, string) {
 	t.Setenv("KUBEADAPT_API_KEY", "")
 	t.Setenv("KUBEADAPT_API_URL", "")
 
-	cfgFile = filepath.Join(t.TempDir(), "nonexistent.yaml")
+	// An empty file: it exists, as an explicit --config must, and holds no key.
+	cfgFile = filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(cfgFile, nil, 0600))
 	args = append(args, "--config", cfgFile)
 
 	rootCmd.SetArgs(args)
@@ -106,6 +110,27 @@ func TestExitCode_APIRejectionExitsOne(t *testing.T) {
 	code, reported := runRoot(t, "get", "clusters", "--api-key", "k", "--api-url", srv.URL)
 	assert.Equal(t, exitError, code,
 		"an API-layer rejection must stay on 1; reported: %s", reported)
+}
+
+// The bearer token would cross the network in cleartext, so every command that
+// sends it refuses first - not just auth login - and before any request.
+func TestExitCode_CleartextAPIURLIsUsageError(t *testing.T) {
+	// .invalid never resolves, so reaching the network would surface as a DNS
+	// error rather than the refusal asserted below.
+	const remote = "http://api.kubeadapt-test.invalid"
+
+	for _, args := range [][]string{
+		{"get", "clusters"},
+		{"get", "workload", "wl-1"},
+		{"get", "pods", "wl-1"},
+		{"get", "overview"},
+	} {
+		t.Run(args[1], func(t *testing.T) {
+			code, reported := runRoot(t, append(args, "--api-key", "k", "--api-url", remote)...)
+			assert.Equal(t, exitUsage, code, "reported: %s", reported)
+			assert.Contains(t, reported, "cleartext")
+		})
+	}
 }
 
 func TestExitCode_SuccessIsZero(t *testing.T) {

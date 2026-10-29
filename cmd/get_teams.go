@@ -28,23 +28,19 @@ var getTeamsCmd = &cobra.Command{
 
 		deptIDs, _ := cmd.Flags().GetStringSlice("department-id")
 		origins, _ := cmd.Flags().GetStringSlice("origin")
-		if err := validateEnumSlice("origin", origins, originValues); err != nil {
-			return err
-		}
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Team, *types.Meta, error) {
 			return c.ListTeams(ctx, api.TeamFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:     paged.pageOpts(cursor),
 				CostModeOpt:   api.CostModeOpt{CostMode: paged.CostMode},
 				DepartmentIDs: deptIDs,
 				Origins:       origins,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeams)
+		order := costDesc(func(t types.Team) (types.Money, string, string) {
+			return t.Cost.CurrentRunRateHourly, t.ID, ""
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeams, order)
 	},
 }
 

@@ -12,7 +12,7 @@ import (
 var getTeamAssignmentsCmd = &cobra.Command{
 	Use:   "team-assignments <team-id>",
 	Short: "List a team's assignments",
-	Long: `List workload/namespace/cluster assignments for a team. Use filters to narrow
+	Long: `List workload, namespace and persistent volume (pv) assignments for a team. Use filters to narrow
 by entity type, cluster, or assignment source. The assignments endpoint rejects
 --cost-mode; an assignment records attribution, not cost.`,
 	Args:              cobra.ExactArgs(1),
@@ -49,15 +49,15 @@ by entity type, cluster, or assignment source. The assignments endpoint rejects
 				Source:     source,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeamAssignments)
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeamAssignments, nil)
 	},
 }
 
 func init() {
-	getTeamAssignmentsCmd.Flags().String("entity-type", "", "Filter by entity type (namespace|workload|cluster)")
+	getTeamAssignmentsCmd.Flags().String("entity-type", "", "Filter by entity type (workload|namespace|pv)")
 	getTeamAssignmentsCmd.Flags().StringSlice("cluster-id", nil, clusterIDFilterUsage)
-	getTeamAssignmentsCmd.Flags().String("source", "", "Filter by source: k8s_label (auto from K8s label) | user_manual (UI) | namespace_auto (namespace default) | backfill_v1 (migration backfill)")
+	getTeamAssignmentsCmd.Flags().String("source", "", "Filter by source: k8s_label (auto from K8s label) | user_manual (UI) | namespace_auto (namespace default) | backfill_v1 (imported from earlier team labels)")
 	registerClusterIDFlag(getTeamAssignmentsCmd)
-	registerEnumFlag(getTeamAssignmentsCmd, "entity-type", "namespace", "workload", "cluster")
+	registerEnumFlag(getTeamAssignmentsCmd, "entity-type", "workload", "namespace", "pv")
 	getCmd.AddCommand(getTeamAssignmentsCmd)
 }

@@ -27,7 +27,7 @@ func TestListNodes(t *testing.T) {
 func TestGetNode(t *testing.T) {
 	ms := testutil.NewMockServer(t)
 	c := api.NewClient(ms.URL, "test-key")
-	got, _, err := c.GetNode(t.Context(), "node-uid-1")
+	got, _, err := c.GetNode(t.Context(), "node-uid-1", api.NodeGetOpts{})
 	require.NoError(t, err)
 	require.NotNil(t, got, "expected node payload")
 	assert.NotEmpty(t, got.ID, "expected node payload")

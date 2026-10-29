@@ -44,11 +44,7 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Recommendation, *types.Meta, error) {
 			return c.ListRecommendations(ctx, api.RecommendationFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:          paged.pageOpts(cursor),
 				ClusterIDs:         clusterIDs,
 				Namespaces:         namespaces,
 				RecommendationType: recType,
@@ -60,7 +56,10 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
 				MinSavingsHourly:   minSavings,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderRecommendations)
+		order := costDesc(func(r types.Recommendation) (types.Money, string, string) {
+			return r.Savings.EstimatedHourly, r.ID, r.Metadata.Cluster.ID
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderRecommendations, order)
 	},
 }
 

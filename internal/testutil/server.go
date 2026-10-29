@@ -22,6 +22,13 @@ const (
 	statusOK         = "ok"
 )
 
+// AmbiguousWorkloadUID is a workload UID the mock treats as registered in two
+// clusters, the case the API refuses to resolve without ?cluster_id=.
+const AmbiguousWorkloadUID = "ambiguous"
+
+// AmbiguousNodeUID is the node analog of AmbiguousWorkloadUID.
+const AmbiguousNodeUID = "ambiguous-node"
+
 // Behavior-control fields may be mutated between requests to exercise error
 // paths without re-creating the server. Safe for concurrent use: every field
 // access goes through the embedded mutex.
@@ -410,15 +417,39 @@ func handleWorkloadsList(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWorkloadDetail(w http.ResponseWriter, r *http.Request) {
-	if r.PathValue("workload_uid") == missingPathValue {
+	switch r.PathValue("workload_uid") {
+	case missingPathValue:
 		WriteError(w, http.StatusNotFound, api.CodeWorkloadNotFound, "workload not found")
 		return
+	case AmbiguousWorkloadUID:
+		if !r.URL.Query().Has("cluster_id") {
+			WriteError(w, http.StatusUnprocessableEntity, api.CodeValidationError,
+				"workload uid exists in more than one cluster; pass cluster_id",
+				map[string]any{
+					"field":   "cluster_id",
+					"reason":  api.ReasonAmbiguousWorkloadUID,
+					"allowed": []string{clusterIDProd, clusterIDStaging},
+				})
+			return
+		}
 	}
 	WriteEnvelope(w, SampleWorkload(), metaWithCostMode(r))
 }
 
+// cluster_id narrows the list to one cluster, as the API does for a workload
+// UID registered in more than one.
 func handleWorkloadPods(w http.ResponseWriter, r *http.Request) {
-	page, pag := paginate(SamplePods(), r.URL.Query())
+	pods := SamplePods()
+	if id := r.URL.Query().Get("cluster_id"); id != "" {
+		kept := pods[:0]
+		for _, p := range pods {
+			if p.Metadata.Cluster.ID == id {
+				kept = append(kept, p)
+			}
+		}
+		pods = kept
+	}
+	page, pag := paginate(pods, r.URL.Query())
 	WritePaginated(w, page, metaWithCostMode(r), pag)
 }
 
@@ -434,9 +465,21 @@ func handleNodeDetail(w http.ResponseWriter, r *http.Request) {
 	if rejectCostMode(w, r, "node") {
 		return
 	}
-	if r.PathValue("node_uid") == missingPathValue {
+	switch r.PathValue("node_uid") {
+	case missingPathValue:
 		WriteError(w, http.StatusNotFound, api.CodeNodeNotFound, "node not found")
 		return
+	case AmbiguousNodeUID:
+		if !r.URL.Query().Has("cluster_id") {
+			WriteError(w, http.StatusUnprocessableEntity, api.CodeValidationError,
+				"node uid exists in more than one cluster; pass cluster_id",
+				map[string]any{
+					"field":   "cluster_id",
+					"reason":  api.ReasonAmbiguousNodeUID,
+					"allowed": []string{clusterIDProd, clusterIDStaging},
+				})
+			return
+		}
 	}
 	WriteEnvelope(w, SampleNode(), defaultMeta())
 }

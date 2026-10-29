@@ -66,4 +66,5 @@ type WorkloadCost struct {
 	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
 	CostMode             string `json:"cost_mode,omitempty"`
 	LastUpdatedAt        string `json:"last_updated_at,omitempty"`
+	CostVector
 }

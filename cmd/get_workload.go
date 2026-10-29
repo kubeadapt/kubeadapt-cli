@@ -11,13 +11,17 @@ import (
 )
 
 var getWorkloadCmd = &cobra.Command{
-	Use:               "workload <workload-uid>",
-	Short:             "Show a workload",
-	Long:              `Show details for a single workload by k8s metadata.uid.`,
+	Use:   "workload <workload-uid>",
+	Short: "Show a workload",
+	Long: `Show details for a single workload by k8s metadata.uid.
+
+The same UID can be registered in more than one cluster. When it is, the API
+asks which one; pass --cluster-id to choose.`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: firstArgOnly(completeWorkloadUIDs),
 	Example: `  kubeadapt get workload 11111111-2222-3333-4444-555555555555
-  kubeadapt get workload 11111111-... --cost-mode workload_only -o yaml`,
+  kubeadapt get workload 11111111-... --cost-mode workload_only -o yaml
+  kubeadapt get workload 11111111-... --cluster-id 00000000-0000-0000-0000-000000000001`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		rctx := getRunContext(cmd)
 		c, err := newAPIClientFromCmd(cmd)
@@ -28,12 +32,17 @@ var getWorkloadCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		clusterID, err := optionalClusterID(cmd)
+		if err != nil {
+			return err
+		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
 
 		opts := api.WorkloadGetOpts{
 			CostModeOpt: api.CostModeOpt{CostMode: paged.CostMode},
+			ClusterID:   clusterID,
 		}
 		w, _, err := c.GetWorkload(ctx, args[0], opts)
 		if err != nil {
@@ -56,5 +65,8 @@ var getWorkloadCmd = &cobra.Command{
 }
 
 func init() {
+	getWorkloadCmd.Flags().StringSlice("cluster-id", nil,
+		"Cluster to read the workload from, when its UID exists in more than one (exactly one)")
+	registerClusterIDFlag(getWorkloadCmd)
 	getCmd.AddCommand(getWorkloadCmd)
 }

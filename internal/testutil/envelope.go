@@ -96,9 +96,13 @@ func errorStatusFor(code api.ErrorCode) int { //nolint:gocyclo // simple lookup 
 		return http.StatusTooManyRequests
 	case api.CodeRateLimitUnavailable, api.CodeServiceUnavailable:
 		return http.StatusServiceUnavailable
-	case api.CodeBadRequest, api.CodeInvalidCursor:
+	case api.CodeUpstreamUnavailable:
+		return http.StatusBadGateway
+	case api.CodeUpstreamTimeout:
+		return http.StatusGatewayTimeout
+	case api.CodeBadRequest, api.CodeInvalidCursor, api.CodeInvalidClusterID:
 		return http.StatusBadRequest
-	case api.CodeValidationError, api.CodeInvalidCostMode, api.CodeInvalidClusterID:
+	case api.CodeValidationError, api.CodeInvalidCostMode:
 		return http.StatusUnprocessableEntity
 	case api.CodeCursorExpired:
 		return http.StatusGone

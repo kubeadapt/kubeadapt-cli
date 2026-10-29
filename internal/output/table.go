@@ -326,15 +326,18 @@ func RenderWorkload(w io.Writer, item types.Workload) error {
 	return writeTable(w, detailHeaders, rows)
 }
 
+// The cluster column is the ID --cluster-id takes; two registrations of one
+// cluster can share a name.
 func RenderPods(w io.Writer, items []types.Pod, meta *types.Meta) error {
 	return renderList(w, items, meta, "No pods found.",
-		[]string{colNamespace, colName, "Workload", "Node", "Phase", "QoS", colDollarHr},
+		[]string{"Cluster ID", colNamespace, colName, "Workload", "Node", "Phase", "QoS", colDollarHr},
 		func(p types.Pod) []string {
 			workload := noValue
 			if p.Metadata.Workload != nil {
 				workload = formatStr(p.Metadata.Workload.Name)
 			}
 			return []string{
+				formatStr(p.Metadata.Cluster.ID),
 				formatStr(p.Metadata.Namespace),
 				p.Metadata.Name,
 				workload,

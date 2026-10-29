@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -197,7 +198,7 @@ func TestDoEnvelopeGet_CursorParamsForwarded(t *testing.T) {
 		writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "x"}))
 	})
 
-	params := appendCursorParams(nil, "abc123", 50, true)
+	params := appendCursorParams(nil, PagedOpts{Cursor: "abc123", Limit: 50, IncludeTotal: true})
 	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", params)
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", seen.Get("cursor"))
@@ -234,15 +235,152 @@ func TestDoEnvelopeGet_RequestIDLogged(t *testing.T) {
 	assert.Equal(t, "rid-server-issued-42", meta.RequestID)
 }
 
+// A proxy, load balancer or wrong --api-url answers with its own page. Quoting
+// that page back at the user is noise at best and someone else's content at
+// worst, so the error names the host, status and content type instead.
 func TestDoEnvelopeGet_Non2xxWithoutEnvelope(t *testing.T) {
-	_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("upstream is on fire"))
+	tests := []struct {
+		name        string
+		status      int
+		contentType string
+		body        string
+		wantSuffix  string
+		classify    func(error) bool
+	}{
+		{
+			name:        "html 404 page",
+			status:      http.StatusNotFound,
+			contentType: "text/html; charset=utf-8",
+			body:        "<!doctype html><html><body>Not Found</body></html>",
+			wantSuffix:  "(HTTP 404, text/html)",
+			classify:    IsNotFound,
+		},
+		{
+			name:        "proxy text 503",
+			status:      http.StatusServiceUnavailable,
+			contentType: "text/plain",
+			body:        "upstream connect error or disconnect/reset before headers",
+			wantSuffix:  "(HTTP 503, text/plain)",
+			classify:    IsServerError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+
+			_, _, err := DoEnvelopeGet[widget](t.Context(), NewClient(srv.URL, "key"), "/v1/widgets", nil)
+
+			apiErr, ok := errors.AsType[*APIError](err)
+			require.True(t, ok, "expected *APIError, got %T: %v", err, err)
+			assert.True(t, apiErr.NotEnvelope)
+			assert.Equal(t, tt.status, apiErr.StatusCode)
+			host := strings.TrimPrefix(srv.URL, "http://")
+			assert.Equal(t, "unexpected response from "+host+" "+tt.wantSuffix, apiErr.Message)
+			assert.Equal(t, apiErr.Message, err.Error())
+			assert.NotContains(t, err.Error(), tt.body, "the body must never be echoed")
+			assert.True(t, tt.classify(err), "status-based classification must still apply")
+		})
+	}
+}
+
+func TestDoEnvelopeGet_CapsResponseBodies(t *testing.T) {
+	t.Run("oversized success body fails cleanly", func(t *testing.T) {
+		_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"id":"`))
+			_, _ = w.Write(bytes.Repeat([]byte("x"), maxResponseBytes))
+			_, _ = w.Write([]byte(`"}}`))
+		})
+		require.Error(t, err)
+		_, isAPI := errors.AsType[*APIError](err)
+		assert.False(t, isAPI, "an oversized 200 is a client-side refusal, not an API error")
+		assert.Contains(t, err.Error(), "larger than 32 MiB")
 	})
-	apiErr, ok := errors.AsType[*APIError](err)
-	require.True(t, ok, "expected *APIError, got %T: %v", err, err)
-	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
-	assert.Contains(t, apiErr.Message, "upstream is on fire")
+
+	t.Run("oversized error body is not decoded or echoed", func(t *testing.T) {
+		_, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			// A syntactically valid envelope, padded past the error cap: if it
+			// were decoded anyway its message would surface.
+			_, _ = w.Write([]byte(`{"error":{"code":"BAD_REQUEST","message":"decoded anyway","pad":"`))
+			_, _ = w.Write(bytes.Repeat([]byte("x"), maxErrorBodyBytes))
+			_, _ = w.Write([]byte(`"}}`))
+		})
+		apiErr, ok := errors.AsType[*APIError](err)
+		require.True(t, ok, "expected *APIError, got %T: %v", err, err)
+		assert.True(t, apiErr.NotEnvelope)
+		assert.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+		assert.NotContains(t, apiErr.Message, "decoded anyway")
+	})
+
+	t.Run("body at the cap is accepted", func(t *testing.T) {
+		name := strings.Repeat("x", 1<<20)
+		got, _, err := getWidget(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, successEnvelope(widget{ID: "big", Name: name}))
+		})
+		require.NoError(t, err)
+		assert.Len(t, got.Name, 1<<20)
+	})
+}
+
+func TestCheckBaseURL(t *testing.T) {
+	tests := []struct {
+		url     string
+		wantErr string
+	}{
+		{url: "https://public-api.kubeadapt.io"},
+		{url: "HTTPS://public-api.kubeadapt.io"},
+		{url: "http://localhost:8080"},
+		{url: "http://LOCALHOST:8080"},
+		{url: "http://127.0.0.1:8080"},
+		{url: "http://127.8.9.10"},
+		{url: "http://[::1]:8080"},
+		{url: "http://example.com", wantErr: "cleartext"},
+		{url: "http://10.0.0.5:8080", wantErr: "cleartext"},
+		{url: "http://localhost.example.com", wantErr: "cleartext"},
+		{url: "http://128.0.0.1", wantErr: "cleartext"},
+		{url: "public-api.kubeadapt.io", wantErr: "expected https://"},
+		{url: "localhost:8080", wantErr: "expected https://"},
+		{url: "ftp://example.com", wantErr: "expected https://"},
+		{url: "https://", wantErr: "expected https://"},
+		{url: "https://bad host", wantErr: "invalid API URL"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			err := CheckBaseURL(tt.url)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+// A same-host https -> http redirect would otherwise carry the Authorization
+// header in cleartext.
+func TestDoEnvelopeGet_RefusesRedirectToCleartext(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.Redirect(w, r, "http://api.example.com/v1/widgets", http.StatusFound)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "secret-key")
+	_, _, err := DoEnvelopeGet[widget](t.Context(), c, "/v1/widgets", nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cleartext")
+	assert.NotContains(t, err.Error(), "secret-key")
+	assert.Equal(t, int32(1), hits.Load(), "only the original loopback request is sent")
 }
 
 func TestPickScopedOrFlat(t *testing.T) {
@@ -278,6 +416,7 @@ func TestAppendCursorParams(t *testing.T) {
 		cursor       string
 		limit        int
 		includeTotal bool
+		sort         string
 		assertions   func(t *testing.T, p url.Values)
 	}{
 		{
@@ -337,6 +476,13 @@ func TestAppendCursorParams(t *testing.T) {
 			},
 		},
 		{
+			name: "sort sent when set",
+			sort: SortByID,
+			assertions: func(t *testing.T, p url.Values) {
+				assert.Equal(t, "id", p.Get("sort"))
+			},
+		},
+		{
 			name:         "existing params preserved",
 			seed:         url.Values{"existing": []string{"keep"}},
 			cursor:       "c1",
@@ -352,7 +498,7 @@ func TestAppendCursorParams(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := appendCursorParams(tt.seed, tt.cursor, tt.limit, tt.includeTotal)
+			got := appendCursorParams(tt.seed, PagedOpts{Cursor: tt.cursor, Limit: tt.limit, IncludeTotal: tt.includeTotal, Sort: tt.sort})
 			tt.assertions(t, got)
 		})
 	}

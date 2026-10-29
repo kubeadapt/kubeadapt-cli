@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
-	"net/url"
 	"os"
 	"strings"
 
@@ -19,9 +17,16 @@ import (
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with Kubeadapt API",
-	Long:  `Authenticate with the Kubeadapt API by providing your API key. The key is stored securely in ~/.kubeadapt/config.yaml.`,
-	Example: `  kubeadapt auth login
-  kubeadapt auth login --api-key your-key-here`,
+	Long: `Authenticate with the Kubeadapt API by providing your API key. The key is
+verified, then saved to the config file (see --config) readable only by you.`,
+	Example: `  # Prompt for the key; input is hidden
+  kubeadapt auth login
+
+  # Pipe it from a secret store instead of typing it
+  pass show kubeadapt/api-key | kubeadapt auth login
+
+  # Or skip the config file and read the key from the environment
+  export KUBEADAPT_API_KEY="$(pass show kubeadapt/api-key)"`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, _ := cmd.Flags().GetString("api-key")
@@ -92,34 +97,6 @@ func rejectedKeyError(url string, e *api.APIError) error {
 		return fmt.Errorf("invalid API key: rejected by %s. %s", url, unchanged)
 	}
 	return fmt.Errorf("could not verify API key against %s: %s. %s", url, e, unchanged)
-}
-
-// The key is sent as a bearer token on every request, so a cleartext endpoint
-// exposes it to anything on the path. Loopback is exempt because a locally-run
-// API never puts the key on a network, and blocking it would break local dev.
-func requireSecureAPIURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return usagef("invalid --api-url %q: %v", raw, err)
-	}
-	switch {
-	case u.Scheme == "https":
-		return nil
-	case u.Scheme == "http" && isLoopbackHost(u.Hostname()):
-		return nil
-	case u.Scheme == "":
-		return usagef("invalid --api-url %q: missing scheme (expected https://...)", raw)
-	}
-	return usagef("refusing to send the API key in cleartext to %q. "+
-		"Use https://, or http:// with a loopback host (localhost, 127.0.0.1, ::1) for local development", raw)
-}
-
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 // promptAPIKey reads a key from the command's input. The prompt goes to stderr

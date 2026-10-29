@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -79,11 +80,12 @@ func colorSampleClusters() []types.Cluster {
 	}}
 }
 
-// Points cfgFile at a path that cannot exist so PersistentPreRunE falls back to
-// config.Default() rather than reading the developer's real config.
+// Points the default config location at an empty temp dir so PersistentPreRunE
+// never reads the developer's real config.
 func isolatedConfig(t *testing.T) {
 	t.Helper()
-	cfgFile = filepath.Join(t.TempDir(), "nonexistent.yaml")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfgFile = ""
 }
 
 func TestNoColorFlag_DisablesANSI(t *testing.T) {
@@ -330,8 +332,7 @@ func TestConfigOverrideChain_ConfigFallback(t *testing.T) {
 
 func TestConfigMissing_UsesDefault(t *testing.T) {
 	resetGlobals(t)
-
-	cfgFile = filepath.Join(t.TempDir(), "nonexistent.yaml")
+	isolatedConfig(t)
 
 	cmd := dummyCmd()
 	require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
@@ -340,4 +341,75 @@ func TestConfigMissing_UsesDefault(t *testing.T) {
 	require.NotNil(t, rc, "RunContext is nil after PersistentPreRunE")
 	const wantURL = "https://public-api.kubeadapt.io"
 	assert.Equal(t, wantURL, rc.Config.APIURL)
+}
+
+func TestConfigMalformed_FailsWithParseErrorAndPath(t *testing.T) {
+	resetGlobals(t)
+	cfgFile = filepath.Join(t.TempDir(), "config.yaml")
+	writeConfigFile(t, cfgFile, "api_key: [unterminated\n")
+
+	err := rootCmd.PersistentPreRunE(dummyCmd(), nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), cfgFile)
+	assert.NotContains(t, friendlyError(err), "no API key")
+	assert.Equal(t, exitError, exitCodeFor(err))
+}
+
+func TestConfigExplicitMissing_FailsAsUsageError(t *testing.T) {
+	resetGlobals(t)
+	cfgFile = filepath.Join(t.TempDir(), "typo.yaml")
+
+	err := rootCmd.PersistentPreRunE(dummyCmd(), nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), cfgFile)
+	assert.Contains(t, err.Error(), "does not exist")
+	assert.Equal(t, exitUsage, exitCodeFor(err))
+}
+
+func TestConfigPermissions_WarnWhenKeyIsReadableByOthers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits do not apply on Windows")
+	}
+	tests := []struct {
+		name     string
+		content  string
+		mode     os.FileMode
+		wantWarn bool
+	}{
+		{name: "0644 with key", content: "api_key: file-key\n", mode: 0644, wantWarn: true},
+		{name: "0600 with key", content: "api_key: file-key\n", mode: 0600},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetGlobals(t)
+			cfgFile = filepath.Join(t.TempDir(), "config.yaml")
+			writeConfigFile(t, cfgFile, tt.content)
+			require.NoError(t, os.Chmod(cfgFile, tt.mode))
+			t.Setenv("KUBEADAPT_API_KEY", "env-key")
+
+			cmd := dummyCmd()
+			var stderr, stdout bytes.Buffer
+			cmd.SetErr(&stderr)
+			cmd.SetOut(&stdout)
+			require.NoError(t, rootCmd.PersistentPreRunE(cmd, nil))
+
+			assert.Empty(t, stdout.String(), "the warning must not pollute stdout")
+			if !tt.wantWarn {
+				assert.Empty(t, stderr.String())
+				return
+			}
+			assert.Equal(t, 1, strings.Count(stderr.String(), "\n"), "one line: %q", stderr.String())
+			assert.Contains(t, stderr.String(), "chmod 600 "+cfgFile)
+			assert.NotContains(t, stderr.String(), "file-key")
+		})
+	}
+}
+
+func TestConfigFlagHelp_NamesTheResolvedDefault(t *testing.T) {
+	f := rootCmd.PersistentFlags().Lookup("config")
+	require.NotNil(t, f)
+	assert.Contains(t, f.Usage, config.DefaultPath())
+	assert.NotContains(t, f.Usage, "default is ~/.kubeadapt/config.yaml")
 }

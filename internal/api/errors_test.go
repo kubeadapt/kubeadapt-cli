@@ -31,6 +31,11 @@ func TestAPIError_Error(t *testing.T) {
 			err:  &APIError{StatusCode: 502, Message: "bad gateway"},
 			want: "API error (HTTP 502): bad gateway",
 		},
+		{
+			name: "not an envelope",
+			err:  &APIError{StatusCode: 503, Message: "unexpected response from example.com (HTTP 503, text/plain)", NotEnvelope: true},
+			want: "unexpected response from example.com (HTTP 503, text/plain)",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -121,6 +126,13 @@ func TestAPIError_IsNotFound(t *testing.T) {
 
 	t.Run("status-only 404 fallback", func(t *testing.T) {
 		e := &APIError{StatusCode: http.StatusNotFound}
+		assert.True(t, IsNotFound(e))
+	})
+
+	// The API answers an unknown route with BAD_REQUEST and status 404; there
+	// is no generic NOT_FOUND code, so the status is what carries the meaning.
+	t.Run("BAD_REQUEST with 404 status", func(t *testing.T) {
+		e := &APIError{StatusCode: http.StatusNotFound, Code: CodeBadRequest}
 		assert.True(t, IsNotFound(e))
 	})
 

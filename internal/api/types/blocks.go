@@ -48,3 +48,13 @@ type UtilizationGPU struct {
 	MemoryUsedBytes    int64   `json:"memory_used_bytes"`
 	MemoryTotalBytes   int64   `json:"memory_total_bytes"`
 }
+
+// CostVector is the breakdown beside each cost block's total. An empty
+// Components means the total could not be split, so it uses omitzero; Partial
+// is a pointer so an explicit false survives -o json.
+type CostVector struct {
+	Components  map[string]Money `json:"components,omitzero"`
+	Unallocated *Money           `json:"unallocated,omitempty"`
+	Basis       string           `json:"basis,omitempty"`
+	Partial     *bool            `json:"partial,omitempty"`
+}

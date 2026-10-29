@@ -39,7 +39,6 @@ type pageSpec struct {
 	errCode    api.ErrorCode
 	errMessage string
 	total      *int
-	ignored    []string
 }
 
 // fakeAPI serves a scripted sequence of pages and records the cursor seen on
@@ -95,8 +94,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	env := types.Envelope[[]pageItem]{
 		Data: spec.items,
 		Meta: types.Meta{
-			RequestID:     fmt.Sprintf("req-%d", idx),
-			IgnoredParams: spec.ignored,
+			RequestID: fmt.Sprintf("req-%d", idx),
 			Pagination: &types.Pagination{
 				NextCursor: spec.nextCursor,
 				HasMore:    spec.hasMore,
@@ -231,7 +229,7 @@ func (h *paginateHarness) run(t *testing.T) error {
 		}
 		return nil
 	}
-	return runPaginatedList(h.cmd, c, paged, fetch, renderTable)
+	return runPaginatedList(h.cmd, c, paged, fetch, renderTable, nil)
 }
 
 func (h *paginateHarness) emittedIDs(t *testing.T) []string {
@@ -426,12 +424,6 @@ func TestPaginate_ContextCancelDuringSleepAborts(t *testing.T) {
 	assert.Contains(t, h.stderr.String(), "--cursor=c2")
 }
 
-func ignoredPage(ids []string, next string, ignored ...string) pageSpec {
-	p := okPage(ids, next)
-	p.ignored = ignored
-	return p
-}
-
 // runClusters drives the same paginator through the real table renderer so the
 // pagination footer (which --quiet does suppress) is actually produced.
 func (h *paginateHarness) runClusters(t *testing.T) error {
@@ -451,100 +443,7 @@ func (h *paginateHarness) runClusters(t *testing.T) error {
 		params.Set(flagLimit, strconv.Itoa(paged.Limit))
 		return api.DoEnvelopeGet[[]types.Cluster](ctx, c, "/v1/items", params)
 	}
-	return runPaginatedList(h.cmd, c, paged, fetch, output.RenderClusters)
-}
-
-func TestIgnoredParams_WarnsOnStderr(t *testing.T) {
-	h := newPaginateHarness(t, formatJSON, []pageSpec{
-		ignoredPage([]string{"a1"}, "", "namespaces"),
-	}, nil)
-	h.useFakeSleeper(t, nil)
-
-	require.NoError(t, h.run(t))
-
-	assert.Contains(t, h.stderr.String(), "namespaces",
-		"the operator must be told which parameter was dropped")
-	assert.Contains(t, strings.ToLower(h.stderr.String()), "warning",
-		"the line must read as a warning, not as incidental chatter")
-	assert.NotContains(t, h.stdout.String(), "warning",
-		"stdout must stay pipeable into jq; the warning belongs on stderr")
-	assert.Equal(t, []string{"a1"}, h.emittedIDs(t),
-		"stdout must remain clean, parseable JSON")
-}
-
-func TestIgnoredParams_WarnsOncePerRunNotPerPage(t *testing.T) {
-	h := newPaginateHarness(t, formatJSON, []pageSpec{
-		ignoredPage([]string{"a1"}, "c1", "namespaces"),
-		ignoredPage([]string{"b1"}, "c2", "namespaces"),
-		ignoredPage([]string{"d1"}, "c3", "namespaces"),
-		ignoredPage([]string{"e1"}, "", "namespaces"),
-	}, nil, "--paginate")
-	h.useFakeSleeper(t, nil)
-
-	require.NoError(t, h.run(t))
-
-	assert.Equal(t, 1, strings.Count(h.stderr.String(), "namespaces"),
-		"every page carries the same ignored_params; repeating the warning per page is its own defect. stderr=%q", h.stderr.String())
-}
-
-func TestIgnoredParams_SilentWhenAbsent(t *testing.T) {
-	h := newPaginateHarness(t, formatJSON, []pageSpec{
-		okPage([]string{"a1"}, ""),
-	}, nil)
-	h.useFakeSleeper(t, nil)
-
-	require.NoError(t, h.run(t))
-
-	assert.NotContains(t, strings.ToLower(h.stderr.String()), "warning",
-		"a request with no ignored params must not warn")
-}
-
-func TestIgnoredParams_NotSuppressedByQuiet(t *testing.T) {
-	output.SetQuiet(true)
-	t.Cleanup(func() { output.SetQuiet(false) })
-
-	h := newPaginateHarness(t, formatTable, []pageSpec{
-		ignoredPage([]string{"a1"}, "", "namespaces"),
-	}, nil, "--quiet")
-	h.useFakeSleeper(t, nil)
-
-	require.NoError(t, h.runClusters(t))
-
-	assert.Contains(t, h.stderr.String(), "namespaces",
-		"--quiet drops non-essential chrome; wrong numbers are not chrome")
-	assert.NotContains(t, h.stdout.String(), "Showing",
-		"precondition: --quiet must still suppress the pagination footer")
-}
-
-func TestIgnoredParams_LiteralWarningText(t *testing.T) {
-	tests := []struct {
-		name    string
-		ignored []string
-		want    string
-	}{
-		{
-			name:    "single",
-			ignored: []string{"namespaces"},
-			want:    "kubeadapt: warning: the API ignored unknown parameter \"namespaces\" - results are NOT filtered by it.\n",
-		},
-		{
-			name:    "multiple",
-			ignored: []string{"namespaces", "clusterId", "min_cost"},
-			want:    "kubeadapt: warning: the API ignored unknown parameters \"namespaces\", \"clusterId\", \"min_cost\" - results are NOT filtered by them.\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := newPaginateHarness(t, formatJSON, []pageSpec{
-				ignoredPage([]string{"a1"}, "", tt.ignored...),
-			}, nil)
-			h.useFakeSleeper(t, nil)
-
-			require.NoError(t, h.run(t))
-			assert.Equal(t, tt.want, h.stderr.String())
-		})
-	}
+	return runPaginatedList(h.cmd, c, paged, fetch, output.RenderClusters, nil)
 }
 
 func TestPaginate_WarnsOnSmallLimitWithPaginate(t *testing.T) {

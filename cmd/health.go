@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ non-2xx status.`,
 				Status  string `json:"status"`
 				Version string `json:"version,omitempty"`
 			}
-			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&body); err != nil {
 				return fmt.Errorf("decode health response: %w", err)
 			}
 

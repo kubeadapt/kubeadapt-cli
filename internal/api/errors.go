@@ -12,7 +12,8 @@ import (
 // one status (404 covers every *_NOT_FOUND), so dispatch on the code.
 type ErrorCode string
 
-// Keep in sync with the Kubeadapt public API error code spec.
+// The API's error catalog. BAD_REQUEST also arrives with 404 for an unknown
+// route and 405 for a wrong method.
 const (
 	CodeUnauthorized           ErrorCode = "UNAUTHORIZED"
 	CodeForbidden              ErrorCode = "FORBIDDEN"
@@ -35,22 +36,41 @@ const (
 	CodeRecommendationNotFound ErrorCode = "RECOMMENDATION_NOT_FOUND"
 	CodeInternalError          ErrorCode = "INTERNAL_ERROR"
 	CodeServiceUnavailable     ErrorCode = "SERVICE_UNAVAILABLE"
-	CodeNotFound               ErrorCode = "NOT_FOUND"
+	CodeUpstreamUnavailable    ErrorCode = "UPSTREAM_UNAVAILABLE"
+	CodeUpstreamTimeout        ErrorCode = "UPSTREAM_TIMEOUT"
+)
+
+// Values of error.details[].reason that the CLI turns into specific guidance.
+const (
+	// With CLUSTER_ACCESS_DENIED: the key is restricted to a set of clusters
+	// and none of them is left for this request.
+	ReasonNoClusterInScope = "no_cluster_in_scope"
+
+	// With VALIDATION_ERROR on a workload or node detail: the UID exists in
+	// more than one cluster the key can read, and "allowed" lists them.
+	ReasonAmbiguousWorkloadUID = "ambiguous_workload_uid"
+	ReasonAmbiguousNodeUID     = "ambiguous_node_uid"
 )
 
 // APIError is returned on any non-2xx status or populated error envelope.
 // RetryAfter comes from the Retry-After header and is zero when absent.
+// NotEnvelope marks a reply from something other than the API, such as a
+// proxy; Message then describes the response instead of quoting it.
 type APIError struct { //nolint:revive
-	StatusCode int              `json:"status_code"`
-	Code       ErrorCode        `json:"code"`
-	Message    string           `json:"message"`
-	Details    []map[string]any `json:"details,omitempty"`
-	RetryAfter time.Duration    `json:"-"`
+	StatusCode  int              `json:"status_code"`
+	Code        ErrorCode        `json:"code"`
+	Message     string           `json:"message"`
+	Details     []map[string]any `json:"details,omitempty"`
+	RetryAfter  time.Duration    `json:"-"`
+	NotEnvelope bool             `json:"-"`
 }
 
 func (e *APIError) Error() string {
 	if e == nil {
 		return "<nil APIError>"
+	}
+	if e.NotEnvelope {
+		return e.Message
 	}
 	if e.Code != "" {
 		return fmt.Sprintf("API error (HTTP %d, code=%s): %s", e.StatusCode, e.Code, e.Message)
@@ -104,11 +124,67 @@ func IsNotFound(err error) bool {
 	switch apiErr.Code {
 	case CodeClusterNotFound, CodeNamespaceNotFound, CodeWorkloadNotFound,
 		CodeNodeNotFound, CodeNodeGroupNotFound, CodeTeamNotFound,
-		CodeDepartmentNotFound, CodeRecommendationNotFound, CodeNotFound:
+		CodeDepartmentNotFound, CodeRecommendationNotFound:
 		return true
 	}
-	// Fallback for transport-layer 404s raised before the body is parsed.
+	// A 404 without a *_NOT_FOUND code - BAD_REQUEST on an unknown route, or a
+	// reply that was not an envelope - still means nothing is there.
 	return apiErr.StatusCode == http.StatusNotFound
+}
+
+// IsNoClusterInScope means the key may read only some clusters and none of
+// them is left for this request.
+func IsNoClusterInScope(err error) bool {
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok || apiErr.Code != CodeClusterAccessDenied {
+		return false
+	}
+	_, found := apiErr.detailWithReason(ReasonNoClusterInScope)
+	return found
+}
+
+var ambiguousUIDReasons = map[string]string{
+	ReasonAmbiguousWorkloadUID: "workload",
+	ReasonAmbiguousNodeUID:     "node",
+}
+
+// AmbiguousUIDClusters reports whether err says a workload or node UID exists
+// in several clusters, and returns the resource and the cluster IDs offered.
+func AmbiguousUIDClusters(err error) (resource string, clusterIDs []string, ok bool) {
+	apiErr, isAPI := errors.AsType[*APIError](err)
+	if !isAPI || apiErr.Code != CodeValidationError {
+		return "", nil, false
+	}
+	var d map[string]any
+	for reason, name := range ambiguousUIDReasons {
+		if found, hit := apiErr.detailWithReason(reason); hit {
+			d, resource = found, name
+			break
+		}
+	}
+	if d == nil {
+		return "", nil, false
+	}
+	switch allowed := d["allowed"].(type) {
+	case []any:
+		for _, v := range allowed {
+			if id, isStr := v.(string); isStr && id != "" {
+				clusterIDs = append(clusterIDs, id)
+			}
+		}
+	case []string:
+		clusterIDs = append(clusterIDs, allowed...)
+	}
+	return resource, clusterIDs, true
+}
+
+func (e *APIError) detailWithReason(reason string) (map[string]any, bool) {
+	for _, d := range e.Details {
+		if r, _ := d["reason"].(string); r == reason {
+			return d, true
+		}
+	}
+	return nil, false
 }
 
 func IsServerError(err error) bool {

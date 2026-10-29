@@ -176,23 +176,16 @@ func TestSave_WriteFailure(t *testing.T) {
 	}
 }
 
-// Kept standalone: this is the only case that touches the real home directory,
-// so it needs backup/restore cleanup that would pollute a shared table.
+// Save("") resolves DefaultPath. XDG_CONFIG_HOME is pointed at a temp dir so
+// the test exercises that resolution without ever touching the real config,
+// which holds the developer's API key.
 func TestSave_EmptyPath(t *testing.T) {
-	defaultPath := DefaultPath()
-	if defaultPath == "" {
-		t.Skip("home directory not available")
-	}
-	// Read original content before any writes so we can restore it.
-	origData, readErr := os.ReadFile(defaultPath)
-	// Register cleanup BEFORE calling Save so it runs even on panic.
-	t.Cleanup(func() {
-		if readErr == nil {
-			_ = os.WriteFile(defaultPath, origData, 0600)
-		} else {
-			_ = os.Remove(defaultPath)
-		}
-	})
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	cfg := &Config{APIURL: "http://test-empty-path.com", APIKey: "test-key"}
 	require.NoError(t, Save(cfg, ""))
+
+	loaded, err := Load(DefaultPath())
+	require.NoError(t, err)
+	assert.Equal(t, cfg.APIKey, loaded.APIKey)
 }

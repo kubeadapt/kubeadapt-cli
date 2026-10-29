@@ -618,3 +618,13 @@ func TestAuthLogin_HonoursContextCancellation(t *testing.T) {
 	assert.NotContains(t, out.String(), "Authenticated", "a cancelled context must abort verification")
 	assert.Contains(t, errOut.String(), "context canceled")
 }
+
+// Examples get copied verbatim, and a key typed as a flag lands in shell
+// history and in ps output for every local user.
+func TestAuthLogin_ExampleKeepsTheKeyOffTheCommandLine(t *testing.T) {
+	assert.NotContains(t, authLoginCmd.Example, "--api-key")
+	assert.Contains(t, authLoginCmd.Example, "| kubeadapt auth login")
+	assert.Contains(t, authLoginCmd.Example, "KUBEADAPT_API_KEY")
+	assert.NotContains(t, authLoginCmd.Long, "~/.kubeadapt/config.yaml",
+		"the key is saved to the resolved config path, which is rarely the legacy one")
+}

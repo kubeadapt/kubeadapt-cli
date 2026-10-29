@@ -8,6 +8,7 @@ import (
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
@@ -17,6 +18,9 @@ func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
 	}
 	if rc.Config.APIKey == "" {
 		return nil, fmt.Errorf("no API key configured. Run 'kubeadapt auth login' first")
+	}
+	if err := requireSecureAPIURL(rc.Config.APIURL); err != nil {
+		return nil, err
 	}
 	opts := []api.Option{api.WithLogger(rc.Logger)}
 	// Retry only under --paginate. A single request that 429s should still fail
@@ -30,6 +34,11 @@ func newAPIClientFromCmd(cmd *cobra.Command) (*api.Client, error) {
 		)
 	}
 	return api.NewClient(rc.Config.APIURL, rc.Config.APIKey, opts...), nil
+}
+
+// The client refuses a cleartext URL too; here it becomes a usage error.
+func requireSecureAPIURL(raw string) error {
+	return asUsageError(api.CheckBaseURL(raw))
 }
 
 func paginateRequested(cmd *cobra.Command) bool {
@@ -61,20 +70,34 @@ type PagedFlags struct {
 	MaxWait      time.Duration
 }
 
-// Shared by the completion registration and the RunE check so the two can
-// never drift into accepting different sets.
 var originValues = []string{"k8s", "kubeadapt"}
 
-// registerEnumFlag only wires shell completion, which a scripted or hand-typed
-// value never passes through. Repeatable enum flags still need checking here so
-// a typo is a usage error rather than an opaque API rejection.
-func validateEnumSlice(flag string, values, allowed []string) error {
-	for _, v := range values {
-		if !slices.Contains(allowed, v) {
-			return usagef("invalid --%s %q (must be one of: %s)", flag, v, strings.Join(allowed, ", "))
+const enumAnnotation = "kubeadapt/enum"
+
+// validateEnumFlags rejects a value outside a flag's registered set, so a
+// typo is a usage error rather than an API round trip. A comma-separated
+// value is checked element by element, as the API splits it.
+func validateEnumFlags(cmd *cobra.Command) error {
+	var err error
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		allowed, ok := f.Annotations[enumAnnotation]
+		if !ok || !f.Changed || err != nil {
+			return
 		}
-	}
-	return nil
+		values := []string{f.Value.String()}
+		if s, isSlice := f.Value.(pflag.SliceValue); isSlice {
+			values = s.GetSlice()
+		}
+		for _, v := range values {
+			for part := range strings.SplitSeq(v, ",") {
+				if part != "" && !slices.Contains(allowed, part) {
+					err = usagef("invalid --%s %q (must be one of: %s)", f.Name, part, strings.Join(allowed, ", "))
+					return
+				}
+			}
+		}
+	})
+	return err
 }
 
 func isValidCostMode(s string) bool {

@@ -71,4 +71,5 @@ type NodeCost struct {
 	OnDemandEquivalentHourly *Money `json:"on_demand_equivalent_hourly,omitempty"`
 	PricingSource            string `json:"pricing_source,omitempty"`
 	LastUpdatedAt            string `json:"last_updated_at,omitempty"`
+	CostVector
 }

@@ -11,12 +11,12 @@ type Pagination struct {
 }
 
 // Meta is response metadata. CostMode is "fully_loaded" or "workload_only" and
-// is present only on endpoints accepting ?cost_mode=. IgnoredParams lists params
-// the server did NOT apply - a typo'd filter silently widens results, still 200.
+// is present only on endpoints accepting ?cost_mode=. Basis echoes the cost
+// basis on cost-bearing endpoints; each block's own basis is on its CostVector.
 type Meta struct {
-	RequestID     string      `json:"request_id"`
-	AppliedAt     string      `json:"applied_at"`
-	CostMode      string      `json:"cost_mode,omitempty"`
-	Pagination    *Pagination `json:"pagination,omitempty"`
-	IgnoredParams []string    `json:"ignored_params,omitempty"`
+	RequestID  string      `json:"request_id"`
+	AppliedAt  string      `json:"applied_at"`
+	CostMode   string      `json:"cost_mode,omitempty"`
+	Basis      string      `json:"basis,omitempty"`
+	Pagination *Pagination `json:"pagination,omitempty"`
 }

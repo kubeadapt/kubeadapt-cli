@@ -43,11 +43,7 @@ cursor-based via --cursor + --limit.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Workload, *types.Meta, error) {
 			return c.ListWorkloads(ctx, api.WorkloadFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:     paged.pageOpts(cursor),
 				CostModeOpt:   api.CostModeOpt{CostMode: paged.CostMode},
 				ClusterIDs:    clusters,
 				Namespaces:    namespaces,
@@ -58,7 +54,10 @@ cursor-based via --cursor + --limit.`,
 				MinCostHourly: minCost,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderWorkloads)
+		order := costDesc(func(w types.Workload) (types.Money, string, string) {
+			return w.Cost.CurrentRunRateHourly, w.ID, w.Metadata.Cluster.ID
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderWorkloads, order)
 	},
 }
 

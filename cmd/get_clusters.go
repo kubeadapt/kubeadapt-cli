@@ -39,18 +39,17 @@ environment, or status. Pagination is cursor-based via --cursor + --limit.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Cluster, *types.Meta, error) {
 			return c.ListClusters(ctx, api.ClusterFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:   paged.pageOpts(cursor),
 				Provider:    provider,
 				Region:      region,
 				Environment: env,
 				Status:      status,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderClusters)
+		order := costDesc(func(cl types.Cluster) (types.Money, string, string) {
+			return cl.Cost.CurrentRunRateHourly, cl.ID, ""
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderClusters, order)
 	},
 }
 

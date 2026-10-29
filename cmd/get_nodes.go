@@ -44,11 +44,7 @@ via --cursor + --limit.`,
 
 		fetch := func(ctx context.Context, cursor string) ([]types.Node, *types.Meta, error) {
 			return c.ListNodes(ctx, api.NodeFilter{
-				PagedOpts: api.PagedOpts{
-					Limit:        paged.Limit,
-					Cursor:       cursor,
-					IncludeTotal: paged.IncludeTotal,
-				},
+				PagedOpts:    paged.pageOpts(cursor),
 				ClusterIDs:   clusterIDs,
 				NodeGroups:   nodeGroups,
 				InstanceType: instanceType,
@@ -59,7 +55,10 @@ via --cursor + --limit.`,
 				CapacityType: capacityType,
 			})
 		}
-		return runPaginatedList(cmd, c, paged, fetch, output.RenderNodes)
+		order := costDesc(func(n types.Node) (types.Money, string, string) {
+			return n.Cost.CurrentRunRateHourly, n.ID, n.Metadata.Cluster.ID
+		})
+		return runPaginatedList(cmd, c, paged, fetch, output.RenderNodes, order)
 	},
 }
 
@@ -71,9 +70,9 @@ func init() {
 	getNodesCmd.Flags().Bool("is-spot", false, "Filter by spot instance "+triStateSuffix)
 	getNodesCmd.Flags().Bool("is-ready", false, "Filter by node readiness "+triStateSuffix)
 	getNodesCmd.Flags().String("architecture", "", "Filter by CPU architecture (amd64|arm64)")
-	getNodesCmd.Flags().String("capacity-type", "", "Filter by capacity type (on-demand|spot)")
+	getNodesCmd.Flags().String("capacity-type", "", "Filter by capacity type (on-demand|spot|reserved|karpenter)")
 	registerClusterIDFlag(getNodesCmd)
 	registerEnumFlag(getNodesCmd, "architecture", "amd64", "arm64")
-	registerEnumFlag(getNodesCmd, "capacity-type", "on-demand", "spot")
+	registerEnumFlag(getNodesCmd, "capacity-type", "on-demand", "spot", "reserved", "karpenter")
 	getCmd.AddCommand(getNodesCmd)
 }

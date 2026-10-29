@@ -1,11 +1,12 @@
 package cmd
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
+	"slices"
 	"strings"
 	"time"
 
@@ -80,8 +81,6 @@ type paginator struct {
 	spent     time.Duration
 	announced bool
 	warned    bool
-
-	ignoredWarned bool
 }
 
 // A run cut short still renders what it collected before returning the error.
@@ -93,6 +92,7 @@ func runPaginatedList[T any](
 	paged PagedFlags,
 	fetch PageFetcher[T],
 	renderTable func(io.Writer, []T, *types.Meta) error,
+	order func(a, b T) int,
 ) error {
 	ctx, cancel := paginateContext(cmd, paged)
 	defer cancel()
@@ -104,7 +104,34 @@ func runPaginatedList[T any](
 		sleep:     paginateSleep,
 		rateLimit: client.RateLimit,
 	}
-	return renderPaginated(cmd, collectPages(ctx, p, fetch), renderTable)
+	run := collectPages(ctx, p, fetch)
+	if paged.Paginate && order != nil {
+		slices.SortStableFunc(run.Items, order)
+	}
+	return renderPaginated(cmd, run, renderTable)
+}
+
+// pageOpts is the request for one page. --paginate walks cost-sorted lists by
+// id, because a cost changes between requests and a cursor keyed on it repeats
+// and skips rows; runPaginatedList then restores the cost order.
+func (p PagedFlags) pageOpts(cursor string) api.PagedOpts {
+	o := api.PagedOpts{Limit: p.Limit, Cursor: cursor, IncludeTotal: p.IncludeTotal}
+	if p.Paginate {
+		o.Sort = api.SortByID
+	}
+	return o
+}
+
+// costDesc is the API's default order for cost-sorted lists: highest first,
+// ties by id, then cluster id.
+func costDesc[T any](key func(T) (cost types.Money, id, clusterID string)) func(a, b T) int {
+	return func(a, b T) int {
+		ca, ia, cla := key(a)
+		cb, ib, clb := key(b)
+		fa, _ := ca.AsFloat()
+		fb, _ := cb.AsFloat()
+		return cmp.Or(cmp.Compare(fb, fa), strings.Compare(ia, ib), strings.Compare(cla, clb))
+	}
 }
 
 // paginateContext bounds the whole run. A single page keeps the original 60s
@@ -141,7 +168,6 @@ func collectPages[T any](ctx context.Context, p *paginator, fetch PageFetcher[T]
 		pages++
 		run.Items = append(run.Items, items...)
 		run.Meta = meta
-		p.warnIgnoredParams(meta)
 		p.warnSmallLimit(meta)
 
 		if !p.paged.Paginate || meta == nil || meta.Pagination == nil || !meta.Pagination.HasMore {
@@ -211,31 +237,6 @@ func (p *paginator) eta(meta *types.Meta, itemsSoFar int, pause time.Duration, r
 	}
 	total := time.Duration(ceilDiv(reqs, perWindow)) * pause
 	return fmt.Sprintf(" Estimated %s of further waiting.", total.Round(time.Second))
-}
-
-// Reports filters the server took with 200 but never applied, so a typo like
-// --namespaces silently widening results is not read as a real number. Not gated
-// on --quiet, and emitted once per run since every page repeats the list.
-func (p *paginator) warnIgnoredParams(meta *types.Meta) {
-	if p.ignoredWarned || meta == nil || len(meta.IgnoredParams) == 0 {
-		return
-	}
-	p.ignoredWarned = true
-	noun, pronoun := "parameter", "it"
-	if len(meta.IgnoredParams) > 1 {
-		noun, pronoun = "parameters", "them"
-	}
-	fmt.Fprintf(p.stderr,
-		"kubeadapt: warning: the API ignored unknown %s %s - results are NOT filtered by %s.\n",
-		noun, quoteJoin(meta.IgnoredParams), pronoun)
-}
-
-func quoteJoin(vals []string) string {
-	quoted := make([]string, 0, len(vals))
-	for _, v := range vals {
-		quoted = append(quoted, strconv.Quote(v))
-	}
-	return strings.Join(quoted, ", ")
 }
 
 func (p *paginator) warnSmallLimit(meta *types.Meta) {

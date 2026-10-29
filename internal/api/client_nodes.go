@@ -27,7 +27,7 @@ func (c *Client) ListNodes(
 	ctx context.Context, f NodeFilter,
 ) ([]types.Node, *types.Meta, error) {
 	path, csvParam := pickScopedOrFlat(
-		func(id string) string { return "/v1/clusters/" + id + "/nodes" },
+		func(id string) string { return "/v1/clusters/" + url.PathEscape(id) + "/nodes" },
 		"/v1/nodes",
 		f.ClusterIDs,
 	)
@@ -50,12 +50,21 @@ func (c *Client) ListNodes(
 	if f.CapacityType != "" {
 		params.Set("capacity_type", f.CapacityType)
 	}
-	params = appendCursorParams(params, f.Cursor, f.Limit, f.IncludeTotal)
+	params = appendCursorParams(params, f.PagedOpts)
 	return DoEnvelopeGet[[]types.Node](ctx, c, path, params)
 }
 
+// ClusterID picks one cluster when the node UID exists in more than one.
+type NodeGetOpts struct {
+	ClusterID string
+}
+
 func (c *Client) GetNode(
-	ctx context.Context, nodeUID string,
+	ctx context.Context, nodeUID string, opts NodeGetOpts,
 ) (*types.Node, *types.Meta, error) {
-	return DoEnvelopeGet[*types.Node](ctx, c, "/v1/nodes/"+nodeUID, nil)
+	var params url.Values
+	if opts.ClusterID != "" {
+		params = url.Values{"cluster_id": {opts.ClusterID}}
+	}
+	return DoEnvelopeGet[*types.Node](ctx, c, "/v1/nodes/"+url.PathEscape(nodeUID), params)
 }
