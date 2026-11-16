@@ -50,8 +50,11 @@ type OrganizationCounts struct {
 }
 
 type OrganizationCost struct {
-	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
-	LastUpdatedAt        string `json:"last_updated_at,omitempty"`
+	RunRate
+	// Clusters left out of the sum for having no current run rate.
+	CostRowsExcluded   int      `json:"cost_rows_excluded"`
+	ExcludedClusterIDs []string `json:"excluded_cluster_ids"`
+	LastUpdatedAt      string   `json:"last_updated_at,omitempty"`
 	CostVector
 }
 
@@ -79,14 +82,17 @@ type OrgDashboardCalendar struct {
 }
 
 type OrgDashboardSavings struct {
-	CurrentHourlyPotential Money `json:"current_hourly_potential"`
-	RecommendationCount    int   `json:"recommendation_count"`
+	CurrentHourlyPotential *Money `json:"current_hourly_potential"`
+	RecommendationCount    int    `json:"recommendation_count"`
+	CostRowsExcluded       int    `json:"cost_rows_excluded"`
 	CostVector
 }
 
 type OrgDashboardClusterRollup struct {
-	Cluster              NestedRef `json:"cluster"`
-	CurrentRunRateHourly Money     `json:"current_run_rate_hourly"`
-	MonthToDateCost      Money     `json:"month_to_date_cost"`
+	Cluster NestedRef `json:"cluster"`
+	RunRate
+	RunRateStale         bool   `json:"run_rate_stale"`
+	RunRateLastUpdatedAt string `json:"run_rate_last_updated_at,omitempty"`
+	MonthToDateCost      Money  `json:"month_to_date_cost"`
 	CostVector
 }

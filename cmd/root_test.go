@@ -75,7 +75,7 @@ func colorSampleClusters() []types.Cluster {
 			Status:      "connected",
 		},
 		Cost: types.ClusterCost{
-			CurrentRunRateHourly: types.Money{Amount: "12.5000", Currency: "USD"},
+			RunRate: types.RunRate{CurrentRunRateHourly: &types.Money{Amount: "12.5000", Currency: "USD"}},
 		},
 	}}
 }

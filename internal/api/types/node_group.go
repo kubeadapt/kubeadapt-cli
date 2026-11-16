@@ -46,7 +46,8 @@ type NodeGroupCounts struct {
 // SpotSavingsVsOndemandHourly is populated when the group contains spot nodes;
 // it is the delta vs the on-demand pricing baseline.
 type NodeGroupCost struct {
-	CurrentRunRateHourly        Money  `json:"current_run_rate_hourly"`
+	RunRate
+	CostRowsExcluded            int    `json:"cost_rows_excluded"`
 	SpotSavingsVsOndemandHourly *Money `json:"spot_savings_vs_ondemand_hourly,omitempty"`
 	LastUpdatedAt               string `json:"last_updated_at,omitempty"`
 	CostVector

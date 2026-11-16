@@ -54,7 +54,7 @@ cursor-based via --cursor + --limit.`,
 				MinCostHourly: minCost,
 			})
 		}
-		order := costDesc(func(w types.Workload) (types.Money, string, string) {
+		order := costDesc(func(w types.Workload) (*types.Money, string, string) {
 			return w.Cost.CurrentRunRateHourly, w.ID, w.Metadata.Cluster.ID
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderWorkloads, order)

@@ -81,6 +81,9 @@ func TestExitCode_UsageErrorsExitTwo(t *testing.T) {
 		{"invalid --top-clusters-limit", []string{"get", "dashboard", "--top-clusters-limit", "99"}},
 		{"missing required flag", []string{"get", "namespace", "ns"}},
 		{"wrong arg count", []string{"get", "cluster"}},
+		{"node-groups --limit", []string{"get", "node-groups", "--limit", "5"}},
+		{"node-groups --cursor", []string{"get", "node-groups", "--cursor", "c"}},
+		{"node-groups --paginate", []string{"get", "node-groups", "--paginate"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

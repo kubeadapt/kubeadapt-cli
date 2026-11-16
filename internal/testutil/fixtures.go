@@ -69,6 +69,15 @@ func money(amount string) types.Money {
 	return types.Money{Amount: amount, Currency: currencyUSD}
 }
 
+func moneyPtr(amount string) *types.Money {
+	m := money(amount)
+	return &m
+}
+
+func runRate(amount string) types.RunRate {
+	return types.RunRate{CurrentRunRateHourly: moneyPtr(amount), CostState: "current"}
+}
+
 func stringPtr(s string) *string { return &s }
 
 func SampleCluster() types.Cluster {
@@ -109,8 +118,8 @@ func SampleCluster() types.Cluster {
 			},
 		},
 		Cost: types.ClusterCost{
-			CurrentRunRateHourly: money("12.4700"),
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("12.4700"),
+			LastUpdatedAt: tsLastSeen,
 		},
 	}
 }
@@ -122,13 +131,13 @@ func SampleClusters() []types.Cluster {
 	staging.ID = clusterIDStaging
 	staging.Metadata.Name = "staging-cluster"
 	staging.Metadata.Environment = "staging"
-	staging.Cost.CurrentRunRateHourly = money("4.2100")
+	staging.Cost.RunRate = runRate("4.2100")
 
 	dev := prod
 	dev.ID = clusterIDDev
 	dev.Metadata.Name = "dev-cluster"
 	dev.Metadata.Environment = "development"
-	dev.Cost.CurrentRunRateHourly = money("1.1500")
+	dev.Cost.RunRate = runRate("1.1500")
 
 	return []types.Cluster{prod, staging, dev}
 }
@@ -162,9 +171,9 @@ func SampleWorkload() types.Workload {
 			Counts:   types.WorkloadCounts{Pods: 3, RunningPods: 3, Containers: 6},
 		},
 		Cost: types.WorkloadCost{
-			CurrentRunRateHourly: money("0.4800"),
-			CostMode:             costFullyLoaded,
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("0.4800"),
+			CostMode:      costFullyLoaded,
+			LastUpdatedAt: tsLastSeen,
 		},
 	}
 }
@@ -178,7 +187,7 @@ func SampleWorkloads() []types.Workload {
 	prometheus.Metadata.WorkloadKind = "StatefulSet"
 	prometheus.Metadata.Namespace = nameMonitoringNS
 	prometheus.Metadata.HasHPA = false
-	prometheus.Cost.CurrentRunRateHourly = money("0.2200")
+	prometheus.Cost.RunRate = runRate("0.2200")
 
 	etl := apiGateway
 	etl.ID = workloadUIDETL
@@ -186,7 +195,7 @@ func SampleWorkloads() []types.Workload {
 	etl.Metadata.WorkloadKind = "CronJob"
 	etl.Metadata.Namespace = "data"
 	etl.Metadata.HasHPA = false
-	etl.Cost.CurrentRunRateHourly = money("0.0900")
+	etl.Cost.RunRate = runRate("0.0900")
 
 	return []types.Workload{apiGateway, prometheus, etl}
 }
@@ -229,9 +238,9 @@ func SamplePod() types.Pod {
 			OOMKillsTotal: 0,
 		},
 		Cost: types.PodCost{
-			CurrentRunRateHourly: money("0.1600"),
-			CostMode:             costFullyLoaded,
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("0.1600"),
+			CostMode:      costFullyLoaded,
+			LastUpdatedAt: tsLastSeen,
 		},
 	}
 }
@@ -290,9 +299,9 @@ func SampleNode() types.Node {
 			Counts: types.NodeCounts{Pods: 12, RunningPods: 12},
 		},
 		Cost: types.NodeCost{
-			CurrentRunRateHourly: money("0.1920"),
-			PricingSource:        "aws-on-demand",
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("0.1920"),
+			PricingSource: "aws-on-demand",
+			LastUpdatedAt: tsLastSeen,
 		},
 	}
 }
@@ -310,7 +319,7 @@ func SampleNodes() []types.Node {
 	spot.Metadata.CapacityType = "SPOT"
 	onDemand := money("0.3400")
 	spot.Cost = types.NodeCost{
-		CurrentRunRateHourly:     money("0.1200"),
+		RunRate:                  runRate("0.1200"),
 		OnDemandEquivalentHourly: &onDemand,
 		PricingSource:            "aws-spot",
 		LastUpdatedAt:            tsLastSeen,
@@ -350,7 +359,7 @@ func SampleNodeGroup() types.NodeGroup {
 			Counts: types.NodeGroupCounts{Nodes: 3, ReadyNodes: 3, Pods: 36},
 		},
 		Cost: types.NodeGroupCost{
-			CurrentRunRateHourly:        money("0.7040"),
+			RunRate:                     runRate("0.7040"),
 			SpotSavingsVsOndemandHourly: &spotSavings,
 			LastUpdatedAt:               tsLastSeen,
 		},
@@ -365,7 +374,7 @@ func SampleNodeGroups() []types.NodeGroup {
 	second.ID = nameComputeOpt
 	second.Metadata.Name = nameComputeOpt
 	second.Metadata.InstanceTypes = []string{"c5.2xlarge", "c5.4xlarge"}
-	second.Cost.CurrentRunRateHourly = money("1.3600")
+	second.Cost.RunRate = runRate("1.3600")
 	second.Nodes = nil
 
 	return []types.NodeGroup{first, second}
@@ -401,16 +410,16 @@ func SampleNamespace() types.Namespace {
 			},
 		},
 		Cost: types.NamespaceCost{
-			CurrentRunRateHourly: money("0.4500"),
-			CostMode:             costFullyLoaded,
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("0.4500"),
+			CostMode:      costFullyLoaded,
+			LastUpdatedAt: tsLastSeen,
 		},
 		WorkloadsTop5: []types.NamespaceTopWorkload{
 			{
 				ID:   workloadUIDAPI,
 				Kind: kindDeployment,
 				Name: nameAPIGateway,
-				Cost: types.NamespaceTopWorkloadCost{CurrentRunRateHourly: money("0.4800")},
+				Cost: types.NamespaceTopWorkloadCost{RunRate: runRate("0.4800")},
 			},
 		},
 	}
@@ -425,7 +434,7 @@ func SampleNamespaces() []types.Namespace {
 	second.Metadata.UIDK8s = "ns-uid-monitoring"
 	second.Metadata.Labels = map[string]string{labelTeam: nameTeamSRE}
 	second.Metadata.Team = &types.NestedRef{ID: teamIDSRE, Name: nameTeamSRE}
-	second.Cost.CurrentRunRateHourly = money("0.3200")
+	second.Cost.RunRate = runRate("0.3200")
 	second.WorkloadsTop5 = nil
 
 	return []types.Namespace{first, second}
@@ -454,7 +463,7 @@ func SampleRecommendation() types.Recommendation {
 		},
 		Current: types.RecommendationSnapshot{
 			Config:     map[string]any{"cpu_request_cores": 0.5},
-			HourlyCost: money("0.4800"),
+			HourlyCost: moneyPtr("0.4800"),
 		},
 		Recommended: types.RecommendationProposal{
 			Config: map[string]any{"cpu_request_cores": 0.15},
@@ -463,7 +472,7 @@ func SampleRecommendation() types.Recommendation {
 			Config: map[string]any{},
 		},
 		Savings: types.RecommendationSavings{
-			EstimatedHourly: money("0.0120"),
+			EstimatedHourly: moneyPtr("0.0120"),
 		},
 		MetricsSnapshot: map[string]any{
 			"cpu_p95_cores": 0.14,
@@ -482,7 +491,7 @@ func SampleRecommendations() []types.Recommendation {
 	second.Metadata.ResourceName = "prometheus"
 	second.Metadata.ResourceUID = workloadUIDPrometheus
 	second.Metadata.Namespace = nameMonitoringNS
-	second.Savings.EstimatedHourly = money("0.0250")
+	second.Savings.EstimatedHourly = moneyPtr("0.0250")
 
 	third := first
 	third.ID = recIDThree
@@ -491,7 +500,7 @@ func SampleRecommendations() []types.Recommendation {
 	third.Metadata.ResourceName = "ip-10-0-3-12.ec2.internal"
 	third.Metadata.Title = "Consolidate underutilized node"
 	third.Metadata.Priority = "high"
-	third.Savings.EstimatedHourly = money("0.1920")
+	third.Savings.EstimatedHourly = moneyPtr("0.1920")
 
 	return []types.Recommendation{first, second, third}
 }
@@ -513,8 +522,8 @@ func SampleTeam() types.Team {
 		AssignedWorkloads: 12,
 		AssignedPVs:       4,
 		Cost: types.TeamCost{
-			CurrentRunRateHourly: money("0.2200"),
-			CostMode:             costFullyLoaded,
+			RunRate:  runRate("0.2200"),
+			CostMode: costFullyLoaded,
 		},
 	}
 }
@@ -529,7 +538,7 @@ func SampleTeams() []types.Team {
 	second.Metadata.OwnerEmail = "sre@example.com"
 	second.AssignedWorkloads = 8
 	second.AssignedPVs = 2
-	second.Cost.CurrentRunRateHourly = money("0.1600")
+	second.Cost.RunRate = runRate("0.1600")
 
 	return []types.Team{first, second}
 }
@@ -550,8 +559,8 @@ func SampleDepartment() types.Department {
 		AssignedWorkloads: 20,
 		AssignedPVs:       6,
 		Cost: types.DepartmentCost{
-			CurrentRunRateHourly: money("0.3800"),
-			CostMode:             costFullyLoaded,
+			RunRate:  runRate("0.3800"),
+			CostMode: costFullyLoaded,
 		},
 	}
 }
@@ -567,7 +576,7 @@ func SampleDepartments() []types.Department {
 	second.Teams = 1
 	second.AssignedWorkloads = 5
 	second.AssignedPVs = 2
-	second.Cost.CurrentRunRateHourly = money("0.1500")
+	second.Cost.RunRate = runRate("0.1500")
 
 	return []types.Department{first, second}
 }
@@ -599,8 +608,8 @@ func SampleOrganization() types.Organization {
 			},
 		},
 		Cost: types.OrganizationCost{
-			CurrentRunRateHourly: money("17.8300"),
-			LastUpdatedAt:        tsLastSeen,
+			RunRate:       runRate("17.8300"),
+			LastUpdatedAt: tsLastSeen,
 		},
 	}
 }
@@ -619,34 +628,34 @@ func SampleOrganizationDashboard() types.OrganizationDashboard {
 			},
 		},
 		Savings: types.OrgDashboardSavings{
-			CurrentHourlyPotential: money("0.5200"),
+			CurrentHourlyPotential: moneyPtr("0.5200"),
 			RecommendationCount:    8,
 		},
 		TopClusters: []types.OrgDashboardClusterRollup{
 			{
-				Cluster:              types.NestedRef{ID: clusterIDProd, Name: nameProdCluster},
-				CurrentRunRateHourly: money("12.4700"),
-				MonthToDateCost:      money("2990.0000"),
+				Cluster:         types.NestedRef{ID: clusterIDProd, Name: nameProdCluster},
+				RunRate:         runRate("12.4700"),
+				MonthToDateCost: money("2990.0000"),
 			},
 			{
-				Cluster:              types.NestedRef{ID: clusterIDStaging, Name: "staging-cluster"},
-				CurrentRunRateHourly: money("4.2100"),
-				MonthToDateCost:      money("1010.0000"),
+				Cluster:         types.NestedRef{ID: clusterIDStaging, Name: "staging-cluster"},
+				RunRate:         runRate("4.2100"),
+				MonthToDateCost: money("1010.0000"),
 			},
 			{
-				Cluster:              types.NestedRef{ID: clusterIDDev, Name: "dev-cluster"},
-				CurrentRunRateHourly: money("1.1500"),
-				MonthToDateCost:      money("250.0000"),
+				Cluster:         types.NestedRef{ID: clusterIDDev, Name: "dev-cluster"},
+				RunRate:         runRate("1.1500"),
+				MonthToDateCost: money("250.0000"),
 			},
 			{
-				Cluster:              types.NestedRef{ID: "00000000-0000-0000-0000-000000000004", Name: "qa-cluster"},
-				CurrentRunRateHourly: money("0.8700"),
-				MonthToDateCost:      money("180.0000"),
+				Cluster:         types.NestedRef{ID: "00000000-0000-0000-0000-000000000004", Name: "qa-cluster"},
+				RunRate:         runRate("0.8700"),
+				MonthToDateCost: money("180.0000"),
 			},
 			{
-				Cluster:              types.NestedRef{ID: "00000000-0000-0000-0000-000000000005", Name: "sandbox-cluster"},
-				CurrentRunRateHourly: money("0.3300"),
-				MonthToDateCost:      money("75.0000"),
+				Cluster:         types.NestedRef{ID: "00000000-0000-0000-0000-000000000005", Name: "sandbox-cluster"},
+				RunRate:         runRate("0.3300"),
+				MonthToDateCost: money("75.0000"),
 			},
 		},
 	}

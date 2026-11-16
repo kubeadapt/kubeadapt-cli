@@ -56,7 +56,7 @@ priority, resource type, cluster, namespace, workload, or minimum savings.`,
 				MinSavingsHourly:   minSavings,
 			})
 		}
-		order := costDesc(func(r types.Recommendation) (types.Money, string, string) {
+		order := costDesc(func(r types.Recommendation) (*types.Money, string, string) {
 			return r.Savings.EstimatedHourly, r.ID, r.Metadata.Cluster.ID
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderRecommendations, order)

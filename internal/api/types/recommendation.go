@@ -35,7 +35,7 @@ type RecommendationMetadata struct {
 
 type RecommendationSnapshot struct {
 	Config     map[string]any `json:"config,omitempty"`
-	HourlyCost Money          `json:"hourly_cost"`
+	HourlyCost *Money         `json:"hourly_cost"`
 	CostVector
 }
 
@@ -50,6 +50,6 @@ type RecommendationApplied struct {
 }
 
 type RecommendationSavings struct {
-	EstimatedHourly Money `json:"estimated_hourly"`
+	EstimatedHourly *Money `json:"estimated_hourly"`
 	CostVector
 }
