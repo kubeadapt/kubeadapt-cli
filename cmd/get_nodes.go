@@ -55,7 +55,7 @@ via --cursor + --limit.`,
 				CapacityType: capacityType,
 			})
 		}
-		order := costDesc(func(n types.Node) (types.Money, string, string) {
+		order := costDesc(func(n types.Node) (*types.Money, string, string) {
 			return n.Cost.CurrentRunRateHourly, n.ID, n.Metadata.Cluster.ID
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderNodes, order)

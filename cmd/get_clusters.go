@@ -46,7 +46,7 @@ environment, or status. Pagination is cursor-based via --cursor + --limit.`,
 				Status:      status,
 			})
 		}
-		order := costDesc(func(cl types.Cluster) (types.Money, string, string) {
+		order := costDesc(func(cl types.Cluster) (*types.Money, string, string) {
 			return cl.Cost.CurrentRunRateHourly, cl.ID, ""
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderClusters, order)

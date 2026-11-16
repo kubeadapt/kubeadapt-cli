@@ -371,7 +371,7 @@ func TestPaginate_WalksByIDAndKeepsCostOrder(t *testing.T) {
 	workload := func(id, cost string) types.Workload {
 		var w types.Workload
 		w.ID = id
-		w.Cost.CurrentRunRateHourly = types.Money{Amount: cost, Currency: "USD"}
+		w.Cost.CurrentRunRateHourly = &types.Money{Amount: cost, Currency: "USD"}
 		return w
 	}
 	pages := map[string][]types.Workload{

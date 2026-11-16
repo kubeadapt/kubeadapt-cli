@@ -29,6 +29,19 @@ func FormatMoneyPtr(m *types.Money) string {
 	return m.String()
 }
 
+// FormatRunRate shows the amount or, when the API sent none, why: cost_state
+// "not_reporting" reads "not reporting". The state set is open, so any value is
+// shown rather than mapped.
+func FormatRunRate(r types.RunRate) string {
+	if r.CurrentRunRateHourly != nil {
+		return r.CurrentRunRateHourly.String()
+	}
+	if r.CostState == "" || r.CostState == "current" {
+		return noValue
+	}
+	return strings.ReplaceAll(r.CostState, "_", " ")
+}
+
 // FormatPercentage formats a value in [0, 100] as "73.5%". NaN, infinity,
 // or negative values render as "-".
 func FormatPercentage(p float64) string {

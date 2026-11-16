@@ -67,7 +67,7 @@ type NodeCounts struct {
 // OnDemandEquivalentHourly is populated only on spot nodes, as the baseline for
 // the spot-savings number.
 type NodeCost struct {
-	CurrentRunRateHourly     Money  `json:"current_run_rate_hourly"`
+	RunRate
 	OnDemandEquivalentHourly *Money `json:"on_demand_equivalent_hourly,omitempty"`
 	PricingSource            string `json:"pricing_source,omitempty"`
 	LastUpdatedAt            string `json:"last_updated_at,omitempty"`

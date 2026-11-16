@@ -24,7 +24,8 @@ type DepartmentMetadata struct {
 // DepartmentCost includes CostMode: it rolls up every workload whose team
 // belongs to this department, so it varies by mode.
 type DepartmentCost struct {
-	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
-	CostMode             string `json:"cost_mode,omitempty"`
+	RunRate
+	CostRowsExcluded int    `json:"cost_rows_excluded"`
+	CostMode         string `json:"cost_mode,omitempty"`
 	CostVector
 }

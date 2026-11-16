@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -123,15 +124,21 @@ func (p PagedFlags) pageOpts(cursor string) api.PagedOpts {
 }
 
 // costDesc is the API's default order for cost-sorted lists: highest first,
-// ties by id, then cluster id.
-func costDesc[T any](key func(T) (cost types.Money, id, clusterID string)) func(a, b T) int {
+// rows with no figure last, ties by id, then cluster id.
+func costDesc[T any](key func(T) (cost *types.Money, id, clusterID string)) func(a, b T) int {
 	return func(a, b T) int {
 		ca, ia, cla := key(a)
 		cb, ib, clb := key(b)
-		fa, _ := ca.AsFloat()
-		fb, _ := cb.AsFloat()
-		return cmp.Or(cmp.Compare(fb, fa), strings.Compare(ia, ib), strings.Compare(cla, clb))
+		return cmp.Or(cmp.Compare(sortAmount(cb), sortAmount(ca)), strings.Compare(ia, ib), strings.Compare(cla, clb))
 	}
+}
+
+func sortAmount(m *types.Money) float64 {
+	if m == nil {
+		return math.Inf(-1)
+	}
+	f, _ := m.AsFloat()
+	return f
 }
 
 // paginateContext bounds the whole run. A single page keeps the original 60s

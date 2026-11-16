@@ -61,7 +61,7 @@ one.`,
 				HostNetwork: hostNetwork,
 			})
 		}
-		order := costDesc(func(p types.Pod) (types.Money, string, string) {
+		order := costDesc(func(p types.Pod) (*types.Money, string, string) {
 			return p.Cost.CurrentRunRateHourly, p.ID, p.Metadata.Cluster.ID
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderPods, order)

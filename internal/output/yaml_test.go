@@ -71,8 +71,8 @@ func yamlSampleCluster() types.Cluster {
 			},
 		},
 		Cost: types.ClusterCost{
-			CurrentRunRateHourly: types.Money{Amount: "12.4700", Currency: "USD"},
-			LastUpdatedAt:        "2025-06-07T08:00:00Z",
+			RunRate:       types.RunRate{CurrentRunRateHourly: &types.Money{Amount: "12.4700", Currency: "USD"}},
+			LastUpdatedAt: "2025-06-07T08:00:00Z",
 		},
 	}
 }

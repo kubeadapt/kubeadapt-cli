@@ -19,4 +19,7 @@ type Meta struct {
 	CostMode   string      `json:"cost_mode,omitempty"`
 	Basis      string      `json:"basis,omitempty"`
 	Pagination *Pagination `json:"pagination,omitempty"`
+
+	// Rows min_cost_hourly left out for having no current run rate.
+	CostRowsExcluded *int `json:"cost_rows_excluded,omitempty"`
 }

@@ -37,7 +37,7 @@ var getTeamsCmd = &cobra.Command{
 				Origins:       origins,
 			})
 		}
-		order := costDesc(func(t types.Team) (types.Money, string, string) {
+		order := costDesc(func(t types.Team) (*types.Money, string, string) {
 			return t.Cost.CurrentRunRateHourly, t.ID, ""
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderTeams, order)

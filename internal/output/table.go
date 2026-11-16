@@ -228,7 +228,7 @@ func RenderClusters(w io.Writer, items []types.Cluster, meta *types.Meta) error 
 				styledStatus(c.Metadata.Status),
 				FormatPercentage(c.Utilization.CPU.UtilizationPercent),
 				FormatPercentage(c.Utilization.Memory.UtilizationPercent),
-				FormatMoney(c.Cost.CurrentRunRateHourly),
+				FormatRunRate(c.Cost.RunRate),
 			}
 		})
 }
@@ -265,7 +265,7 @@ func RenderCluster(w io.Writer, c types.Cluster) error {
 		{lblPods, formatIntPlain(c.Utilization.Counts.Pods)},
 		{lblRunningPods, formatIntPlain(c.Utilization.Counts.RunningPods)},
 		{lblContainers, formatIntPlain(c.Utilization.Counts.Containers)},
-		{colDollarHr, FormatMoney(c.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(c.Cost.RunRate)},
 		{lblCostUpdatedAt, formatStr(c.Cost.LastUpdatedAt)},
 	}
 	return writeTable(w, detailHeaders, rows)
@@ -285,7 +285,7 @@ func RenderWorkloads(w io.Writer, items []types.Workload, meta *types.Meta) erro
 				replicas,
 				FormatCores(item.Utilization.CPU.RequestedCores),
 				FormatBytes(item.Utilization.Memory.RequestedBytes),
-				FormatMoney(item.Cost.CurrentRunRateHourly),
+				FormatRunRate(item.Cost.RunRate),
 			}
 		})
 }
@@ -319,7 +319,7 @@ func RenderWorkload(w io.Writer, item types.Workload) error {
 		{lblPods, formatIntPlain(item.Utilization.Counts.Pods)},
 		{lblRunningPods, formatIntPlain(item.Utilization.Counts.RunningPods)},
 		{lblContainers, formatIntPlain(item.Utilization.Counts.Containers)},
-		{colDollarHr, FormatMoney(item.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(item.Cost.RunRate)},
 		{lblCostMode, formatStr(item.Cost.CostMode)},
 		{lblCostUpdatedAt, formatStr(item.Cost.LastUpdatedAt)},
 	}
@@ -344,7 +344,7 @@ func RenderPods(w io.Writer, items []types.Pod, meta *types.Meta) error {
 				formatRefName(p.Metadata.Node),
 				styledStatus(p.Metadata.Phase),
 				formatStr(p.Metadata.QOSClass),
-				FormatMoney(p.Cost.CurrentRunRateHourly),
+				FormatRunRate(p.Cost.RunRate),
 			}
 		})
 }
@@ -362,7 +362,7 @@ func RenderNodes(w io.Writer, items []types.Node, meta *types.Meta) error {
 				formatStr(n.Metadata.NodeGroup),
 				styledBool(n.Metadata.IsReady),
 				formatBool(n.Metadata.IsSpot),
-				FormatMoney(n.Cost.CurrentRunRateHourly),
+				FormatRunRate(n.Cost.RunRate),
 			}
 		})
 }
@@ -397,7 +397,7 @@ func RenderNode(w io.Writer, n types.Node) error {
 		{"Ephemeral Storage", FormatBytes(n.Capacity.EphemeralStorage.TotalBytes)},
 		{"Pods Allocatable", formatIntPlain(n.Capacity.Pods.Allocatable)},
 		{"Pods Running", formatIntPlain(n.Utilization.Counts.RunningPods)},
-		{colDollarHr, FormatMoney(n.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(n.Cost.RunRate)},
 		{"On-Demand Equivalent $/hr", FormatMoneyPtr(n.Cost.OnDemandEquivalentHourly)},
 		{"Pricing Source", formatStr(n.Cost.PricingSource)},
 		{lblCostUpdatedAt, formatStr(n.Cost.LastUpdatedAt)},
@@ -417,7 +417,7 @@ func RenderNodeGroups(w io.Writer, items []types.NodeGroup, meta *types.Meta) er
 				FormatCores(g.Capacity.CPU.TotalCores),
 				FormatBytes(g.Capacity.Memory.TotalBytes),
 				FormatPercentage(g.Metadata.SpotPercentage),
-				FormatMoney(g.Cost.CurrentRunRateHourly),
+				FormatRunRate(g.Cost.RunRate),
 			}
 		})
 }
@@ -445,7 +445,7 @@ func RenderNodeGroup(w io.Writer, g types.NodeGroup) error {
 		{lblNodes, formatIntPlain(g.Utilization.Counts.Nodes)},
 		{"Ready Nodes", formatIntPlain(g.Utilization.Counts.ReadyNodes)},
 		{lblPods, formatIntPlain(g.Utilization.Counts.Pods)},
-		{colDollarHr, FormatMoney(g.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(g.Cost.RunRate)},
 		{"Spot Savings vs On-Demand $/hr", FormatMoneyPtr(g.Cost.SpotSavingsVsOndemandHourly)},
 		{lblCostUpdatedAt, formatStr(g.Cost.LastUpdatedAt)},
 	}
@@ -475,7 +475,7 @@ func RenderNamespaces(w io.Writer, items []types.Namespace, meta *types.Meta) er
 				FormatBytes(n.Utilization.Memory.UsedBytes),
 				formatRefName(n.Metadata.Team),
 				formatRefName(n.Metadata.Department),
-				FormatMoney(n.Cost.CurrentRunRateHourly),
+				FormatRunRate(n.Cost.RunRate),
 			}
 		})
 }
@@ -508,7 +508,7 @@ func RenderNamespace(w io.Writer, n types.Namespace) error {
 		[]string{lblPods, formatIntPlain(n.Utilization.Counts.Pods)},
 		[]string{lblRunningPods, formatIntPlain(n.Utilization.Counts.RunningPods)},
 		[]string{lblContainers, formatIntPlain(n.Utilization.Counts.Containers)},
-		[]string{colDollarHr, FormatMoney(n.Cost.CurrentRunRateHourly)},
+		[]string{colDollarHr, FormatRunRate(n.Cost.RunRate)},
 		[]string{lblCostMode, formatStr(n.Cost.CostMode)},
 		[]string{lblCostUpdatedAt, formatStr(n.Cost.LastUpdatedAt)},
 	)
@@ -524,7 +524,7 @@ func RenderNamespace(w io.Writer, n types.Namespace) error {
 		for _, wl := range n.WorkloadsTop5 {
 			topRows = append(topRows, []string{
 				wl.ID, formatStr(wl.Kind), formatStr(wl.Name),
-				FormatMoney(wl.Cost.CurrentRunRateHourly),
+				FormatRunRate(wl.Cost.RunRate),
 			})
 		}
 		return writeTable(w, topHeaders, topRows)
@@ -547,7 +547,7 @@ func RenderRecommendations(w io.Writer, items []types.Recommendation, meta *type
 				resource,
 				styledPriority(r.Metadata.Priority),
 				formatStr(r.Metadata.RiskLevel),
-				FormatMoney(r.Savings.EstimatedHourly),
+				FormatMoneyPtr(r.Savings.EstimatedHourly),
 			}
 		})
 }
@@ -568,8 +568,8 @@ func RenderRecommendation(w io.Writer, r types.Recommendation) error {
 		{"Priority", styledPriority(r.Metadata.Priority)},
 		{lblStatus, styledStatus(r.Metadata.Status)},
 		{"Data Points Analyzed", formatIntPlain(r.Metadata.DataPointsAnalyzed)},
-		{"Current $/hr", FormatMoney(r.Current.HourlyCost)},
-		{"Estimated $/hr Savings", FormatMoney(r.Savings.EstimatedHourly)},
+		{"Current $/hr", FormatMoneyPtr(r.Current.HourlyCost)},
+		{"Estimated $/hr Savings", FormatMoneyPtr(r.Savings.EstimatedHourly)},
 	}
 	return writeTable(w, detailHeaders, rows)
 }
@@ -585,7 +585,7 @@ func RenderTeams(w io.Writer, items []types.Team, meta *types.Meta) error {
 				formatStr(t.Metadata.Origin),
 				formatRefName(t.Metadata.Department),
 				formatIntPlain(t.AssignedWorkloads),
-				FormatMoney(t.Cost.CurrentRunRateHourly),
+				FormatRunRate(t.Cost.RunRate),
 			}
 		})
 }
@@ -600,7 +600,7 @@ func RenderTeam(w io.Writer, t types.Team) error {
 		{"Department", formatRefName(t.Metadata.Department)},
 		{"Assigned Workloads", formatIntPlain(t.AssignedWorkloads)},
 		{"Assigned PVs", formatIntPlain(t.AssignedPVs)},
-		{colDollarHr, FormatMoney(t.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(t.Cost.RunRate)},
 		{lblCostMode, formatStr(t.Cost.CostMode)},
 		{lblCreatedAt, formatStr(t.Metadata.CreatedAt)},
 		{"Updated At", formatStr(t.Metadata.UpdatedAt)},
@@ -632,7 +632,7 @@ func RenderDepartments(w io.Writer, items []types.Department, meta *types.Meta) 
 				d.Metadata.Name,
 				formatStr(d.Metadata.Origin),
 				formatIntPlain(d.Teams),
-				FormatMoney(d.Cost.CurrentRunRateHourly),
+				FormatRunRate(d.Cost.RunRate),
 			}
 		})
 }
@@ -647,7 +647,7 @@ func RenderDepartment(w io.Writer, d types.Department) error {
 		{"Teams", formatIntPlain(d.Teams)},
 		{"Assigned Workloads", formatIntPlain(d.AssignedWorkloads)},
 		{"Assigned PVs", formatIntPlain(d.AssignedPVs)},
-		{colDollarHr, FormatMoney(d.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(d.Cost.RunRate)},
 		{lblCostMode, formatStr(d.Cost.CostMode)},
 		{lblCreatedAt, formatStr(d.Metadata.CreatedAt)},
 		{"Updated At", formatStr(d.Metadata.UpdatedAt)},
@@ -682,7 +682,8 @@ func RenderOrganization(w io.Writer, o types.Organization) error {
 		{lblContainers, formatIntPlain(o.Utilization.Counts.Containers)},
 		{"Persistent Volumes", formatIntPlain(o.Utilization.Counts.PersistentVolumes)},
 		{"Recommendations", formatIntPlain(o.Utilization.Counts.Recommendations)},
-		{colDollarHr, FormatMoney(o.Cost.CurrentRunRateHourly)},
+		{colDollarHr, FormatRunRate(o.Cost.RunRate)},
+		{"Clusters Without Run Rate", formatIntPlain(o.Cost.CostRowsExcluded)},
 		{lblCostUpdatedAt, formatStr(o.Cost.LastUpdatedAt)},
 	}
 	return writeTable(w, detailHeaders, rows)
@@ -693,13 +694,13 @@ func RenderOrganizationDashboard(w io.Writer, d types.OrganizationDashboard) err
 		{"Organization ID", d.OrganizationID},
 		{colName, d.Snapshot.Metadata.Name},
 		{"Plan", formatStr(d.Snapshot.Metadata.PlanType)},
-		{"Run Rate $/hr", FormatMoney(d.Snapshot.Cost.CurrentRunRateHourly)},
+		{"Run Rate $/hr", FormatRunRate(d.Snapshot.Cost.RunRate)},
 		{"MTD Billed Cost", FormatMoney(d.MonthToDate.BilledCost)},
 		{"Calendar Month", formatStr(d.MonthToDate.Calendar.Month)},
 		{"Days Elapsed", formatIntPlain(d.MonthToDate.Calendar.DaysElapsed)},
 		{"Days In Month", formatIntPlain(d.MonthToDate.Calendar.DaysInMonth)},
 		{"Month Start At", formatStr(d.MonthToDate.Calendar.MonthStartAt)},
-		{"Current Hourly Savings Potential", FormatMoney(d.Savings.CurrentHourlyPotential)},
+		{"Current Hourly Savings Potential", FormatMoneyPtr(d.Savings.CurrentHourlyPotential)},
 		{"Recommendation Count", formatIntPlain(d.Savings.RecommendationCount)},
 		{"Clusters", formatIntPlain(d.Snapshot.Utilization.Counts.Clusters)},
 		{"Connected Clusters", formatIntPlain(d.Snapshot.Utilization.Counts.ConnectedClusters)},
@@ -717,7 +718,7 @@ func RenderOrganizationDashboard(w io.Writer, d types.OrganizationDashboard) err
 		for _, c := range d.TopClusters {
 			topRows = append(topRows, []string{
 				formatStr(c.Cluster.Name),
-				FormatMoney(c.CurrentRunRateHourly),
+				FormatRunRate(c.RunRate),
 				FormatMoney(c.MonthToDateCost),
 			})
 		}

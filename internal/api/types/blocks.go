@@ -58,3 +58,12 @@ type CostVector struct {
 	Basis       string           `json:"basis,omitempty"`
 	Partial     *bool            `json:"partial,omitempty"`
 }
+
+// RunRate leads every cost block. CurrentRunRateHourly is null when there is no
+// current figure, and CostState says why; a pointer keeps that null through
+// -o json/yaml instead of re-encoding it as an empty amount.
+type RunRate struct {
+	CurrentRunRateHourly *Money  `json:"current_run_rate_hourly"`
+	CostState            string  `json:"cost_state,omitempty"`
+	CostAsOf             *string `json:"cost_as_of"`
+}

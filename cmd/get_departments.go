@@ -35,7 +35,7 @@ var getDepartmentsCmd = &cobra.Command{
 				Origins:     origins,
 			})
 		}
-		order := costDesc(func(d types.Department) (types.Money, string, string) {
+		order := costDesc(func(d types.Department) (*types.Money, string, string) {
 			return d.Cost.CurrentRunRateHourly, d.ID, ""
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderDepartments, order)

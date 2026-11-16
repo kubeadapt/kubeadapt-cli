@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`-o json` and `-o yaml` keep a missing amount as `null`.** When the API has
+  no current figure, `current_run_rate_hourly` (and a recommendation's
+  `hourly_cost` / `estimated_hourly`, or the dashboard's
+  `current_hourly_potential`) is now `null` instead of
+  `{"amount":"","currency":""}`. Scripts that sum amounts should skip nulls,
+  for example `jq '[.data[].cost.current_run_rate_hourly.amount // empty | tonumber] | add'`.
+- Cost blocks now pass through `cost_state` and `cost_as_of`; the organization
+  adds `cost_rows_excluded` and `excluded_cluster_ids`; node groups, teams,
+  departments and the dashboard savings add `cost_rows_excluded`; dashboard top
+  clusters add `run_rate_stale` and `run_rate_last_updated_at`.
+- Tables show why a run rate is missing ("not reporting", "not priced",
+  "ended", "between runs") instead of `-`, and cost-sorted lists put rows
+  without a figure last.
 - `get node-groups` with `--limit`, `--cursor`, `--paginate` or
   `--include-total` now exits with the usage code 2, like every other flag
   rejection, instead of 1.

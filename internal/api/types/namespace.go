@@ -24,7 +24,7 @@ type NamespaceTopWorkload struct {
 }
 
 type NamespaceTopWorkloadCost struct {
-	CurrentRunRateHourly Money `json:"current_run_rate_hourly"`
+	RunRate
 	CostVector
 }
 
@@ -73,8 +73,8 @@ type NamespaceCounts struct {
 
 // NamespaceCost includes CostMode: it sums workload costs, so it varies by mode.
 type NamespaceCost struct {
-	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
-	CostMode             string `json:"cost_mode,omitempty"`
-	LastUpdatedAt        string `json:"last_updated_at,omitempty"`
+	RunRate
+	CostMode      string `json:"cost_mode,omitempty"`
+	LastUpdatedAt string `json:"last_updated_at,omitempty"`
 	CostVector
 }

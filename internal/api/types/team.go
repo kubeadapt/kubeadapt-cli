@@ -25,7 +25,8 @@ type TeamMetadata struct {
 // TeamCost includes CostMode: it sums workload costs across assignments, so it
 // varies by mode.
 type TeamCost struct {
-	CurrentRunRateHourly Money  `json:"current_run_rate_hourly"`
-	CostMode             string `json:"cost_mode,omitempty"`
+	RunRate
+	CostRowsExcluded int    `json:"cost_rows_excluded"`
+	CostMode         string `json:"cost_mode,omitempty"`
 	CostVector
 }

@@ -40,7 +40,7 @@ API. Filter via team-assignments or department-assignments queries instead.`,
 				MinCostHourly: minCost,
 			})
 		}
-		order := costDesc(func(n types.Namespace) (types.Money, string, string) {
+		order := costDesc(func(n types.Namespace) (*types.Money, string, string) {
 			return n.Cost.CurrentRunRateHourly, n.ID, n.Metadata.Cluster.ID
 		})
 		return runPaginatedList(cmd, c, paged, fetch, output.RenderNamespaces, order)

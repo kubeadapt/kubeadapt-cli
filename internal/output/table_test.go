@@ -18,6 +18,11 @@ func usdMoney(amount string) types.Money {
 	return types.Money{Amount: amount, Currency: "USD"}
 }
 
+func usdMoneyPtr(amount string) *types.Money {
+	m := usdMoney(amount)
+	return &m
+}
+
 func sampleCluster(name string) types.Cluster {
 	return types.Cluster{
 		ID:   "cluster-" + name,
@@ -40,8 +45,8 @@ func sampleCluster(name string) types.Cluster {
 			Counts: types.ClusterCounts{Nodes: 6, Pods: 120, Workloads: 30},
 		},
 		Cost: types.ClusterCost{
-			CurrentRunRateHourly: usdMoney("12.5000"),
-			LastUpdatedAt:        "2025-05-20T12:00:00Z",
+			RunRate:       types.RunRate{CurrentRunRateHourly: usdMoneyPtr("12.5000")},
+			LastUpdatedAt: "2025-05-20T12:00:00Z",
 		},
 	}
 }
@@ -166,7 +171,7 @@ func TestRenderOrganization(t *testing.T) {
 			CPU:    types.UtilizationCPU{UsedCores: 96, UtilizationPercent: 50.0},
 			Counts: types.OrganizationCounts{Clusters: 3, ConnectedClusters: 2},
 		},
-		Cost: types.OrganizationCost{CurrentRunRateHourly: usdMoney("42.1234")},
+		Cost: types.OrganizationCost{RunRate: types.RunRate{CurrentRunRateHourly: usdMoneyPtr("42.1234")}},
 	}
 	require.NoError(t, RenderOrganization(&buf, org))
 	out := buf.String()
@@ -190,9 +195,9 @@ func TestRenderRecommendation(t *testing.T) {
 			RiskLevel:          "low",
 			Status:             "open",
 		},
-		Current: types.RecommendationSnapshot{HourlyCost: usdMoney("3.4500")},
+		Current: types.RecommendationSnapshot{HourlyCost: usdMoneyPtr("3.4500")},
 		Savings: types.RecommendationSavings{
-			EstimatedHourly: usdMoney("1.0000"),
+			EstimatedHourly: usdMoneyPtr("1.0000"),
 		},
 	}
 	require.NoError(t, RenderRecommendation(&buf, rec))
