@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kubeadapt/kubeadapt-cli/internal/api"
 	"github.com/kubeadapt/kubeadapt-cli/internal/api/types"
@@ -29,7 +28,7 @@ flags (--limit, --cursor, --paginate, --include-total).`,
 		// --limit 2 return all 40 rows; reject instead of pretending.
 		for _, name := range []string{flagLimit, flagCursor, flagPaginate, flagIncludeTotal} {
 			if cmd.Flags().Changed(name) {
-				return fmt.Errorf("--%s is not accepted by the node-groups endpoint, which returns every node group in one response", name)
+				return usagef("--%s is not accepted by the node-groups endpoint, which returns every node group in one response", name)
 			}
 		}
 		c, err := newAPIClientFromCmd(cmd)
